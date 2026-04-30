@@ -1,151 +1,159 @@
 import { useState } from 'react'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { memorials } from '../data/mockData'
-import { MemorialSiteCard, MemorialStoryCard } from '../components/MemorialCard'
+import FilterChip from '../components/FilterChip'
+import { NearbyMemorialCard, StoryCard } from '../components/MemorialCard'
 
-const FILTER_CHIPS = [
-  'בקרבת מקום',
-  'חרבות ברזל',
-  'נפגעי פעולות איבה',
-  'אנדרטה',
-  'מוזיאון',
+// ─── Filter chip definitions ──────────────────────────────────────────────────
+
+const CHIPS = [
+  { label: 'בקרבת מקום' },
+  { label: 'חרבות ברזל',       emoji: '⚔️' },
+  { label: 'נפגעי פעולות איבה', emoji: '🎗️' },
+  { label: 'אנדרטה' },
+  { label: 'מוזיאון' },
 ]
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function MemorialsPage() {
-  const [query, setQuery] = useState('')
+  const [query, setQuery]             = useState('')
   const [activeFilter, setActiveFilter] = useState('בקרבת מקום')
 
+  // Nearby: tagged "בקרבת מקום", fed into the horizontal scroll row
   const nearby = memorials.filter((m) => m.tags.includes('בקרבת מקום'))
-  const recent = memorials.filter((m) => m.soldierImageUrl)
 
-  const filtered = query.trim()
+  // Stories: entries with a soldier portrait, used in the vertical list
+  const stories = memorials.filter((m) => m.soldierImageUrl)
+
+  // Live search results (only shown while the user is typing)
+  const searchResults = query.trim()
     ? memorials.filter(
         (m) =>
           m.name.includes(query) ||
-          m.subtitle.includes(query) ||
-          m.description.includes(query),
+          m.unit.includes(query) ||
+          m.descriptionSnippet.includes(query),
       )
-    : null // null = not in search mode
+    : null
+
+  const isSearching = searchResults !== null
 
   return (
-    <div className="flex flex-col pb-4">
-      {/* ── Search bar ── */}
-      <div className="sticky top-0 z-30 bg-slate-50 px-4 pt-4 pb-3 border-b border-slate-100">
+    <div className="flex flex-col">
+
+      {/* ── Sticky header: search bar + filter chips ── */}
+      <div className="sticky top-0 z-30 bg-slate-50 border-b border-slate-100 px-4 pt-4 pb-3 space-y-3">
+
+        {/* Search input */}
         <div className="relative flex items-center">
-          <Search
-            size={16}
-            className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
+          {/* Filter icon — logical start (visually right in RTL) */}
+          <span className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <SlidersHorizontal size={15} />
+          </span>
+
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder='חיפוש חלל, יחידה, או סיפור הנצחה...'
+            placeholder="חיפוש חלל, יחידה, או סיפור הנצחה..."
             className="
               w-full bg-white border border-slate-200 rounded-2xl
-              py-2.5 pe-9 ps-4
+              py-2.5 pe-10 ps-10
               text-sm text-slate-700 placeholder:text-slate-400
               focus:outline-none focus:ring-2 focus:ring-olive-400 focus:border-transparent
               transition
             "
           />
-          <button className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-olive-600 transition-colors">
-            <SlidersHorizontal size={15} />
-          </button>
+
+          {/* Search icon — logical end (visually left in RTL) */}
+          <span className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <Search size={15} />
+          </span>
         </div>
 
-        {/* Filter chips */}
-        <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-hide pb-0.5">
-          {FILTER_CHIPS.map((chip) => {
-            const isActive = chip === activeFilter
-            return (
-              <button
-                key={chip}
-                onClick={() => setActiveFilter(chip)}
-                className={`
-                  flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full
-                  border transition-colors duration-150 whitespace-nowrap
-                  ${isActive
-                    ? 'bg-olive-600 border-olive-600 text-white'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-olive-400 hover:text-olive-700'}
-                `}
-              >
-                {chip === 'חרבות ברזל' && '⚔️ '}
-                {chip === 'נפגעי פעולות איבה' && '🎗️ '}
-                {chip}
-              </button>
-            )
-          })}
+        {/* Filter chips — horizontal scroll, no scrollbar */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          {CHIPS.map(({ label, emoji }) => (
+            <FilterChip
+              key={label}
+              label={label}
+              emoji={emoji}
+              isActive={label === activeFilter}
+              onClick={() => setActiveFilter(label)}
+            />
+          ))}
         </div>
       </div>
 
-      {/* ── Search results (only when query is active) ── */}
-      {filtered !== null && (
-        <section className="px-4 pt-5">
-          <h2 className="text-base font-bold text-slate-700 mb-3">
-            תוצאות חיפוש ({filtered.length})
+      {/* ════════════════════════════════════════════════
+          SEARCH MODE — live results list
+      ════════════════════════════════════════════════ */}
+      {isSearching && (
+        <section className="px-4 pt-5 pb-6 space-y-3">
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide">
+            תוצאות חיפוש ({searchResults!.length})
           </h2>
-          {filtered.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">לא נמצאו תוצאות</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {filtered.map((m) => (
-                <MemorialStoryCard key={m.id} memorial={m} />
-              ))}
+
+          {searchResults!.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+              <Search size={32} strokeWidth={1.5} />
+              <p className="text-sm">לא נמצאו תוצאות עבור "{query}"</p>
             </div>
+          ) : (
+            searchResults!.map((m) => <StoryCard key={m.id} memorial={m} />)
           )}
         </section>
       )}
 
-      {/* ── Normal mode ── */}
-      {filtered === null && (
+      {/* ════════════════════════════════════════════════
+          NORMAL MODE — two sections
+      ════════════════════════════════════════════════ */}
+      {!isSearching && (
         <>
-          {/* ── Nearby sites — horizontal scroll ── */}
+          {/* ── Section 1: Nearby sites — horizontal scroll ── */}
           <section className="pt-5">
-            <div className="flex items-center justify-between px-4 mb-3">
-              <h2 className="text-base font-bold text-slate-700">
-                אתרי הנצחה בסביבתך
-              </h2>
-              <button className="text-xs text-olive-600 font-semibold hover:underline">
-                הצג הכל
-              </button>
-            </div>
+            <SectionHeader title="אתרי הנצחה בסביבתך" />
 
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide px-4 pb-1">
+            {/* Horizontal scroll container — padding so cards don't clip on edges */}
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 pt-1">
               {nearby.map((m) => (
-                <MemorialSiteCard key={m.id} memorial={m} />
+                <NearbyMemorialCard key={m.id} memorial={m} />
               ))}
             </div>
           </section>
 
-          {/* ── Recently added stories — vertical list ── */}
-          <section className="px-4 pt-6">
-            <h2 className="text-base font-bold text-slate-700 mb-3">
-              נוספו לאחרונה / סיפורי הנצחה
-            </h2>
-            <div className="flex flex-col gap-3">
-              {recent.map((m) => (
-                <MemorialStoryCard key={m.id} memorial={m} />
-              ))}
-            </div>
-          </section>
-
-          {/* ── All memorials ── */}
-          <section className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-slate-700">כל האתרים</h2>
-              <button className="text-xs text-olive-600 font-semibold hover:underline">
-                הצג הכל
-              </button>
-            </div>
-            <div className="flex flex-col gap-3">
-              {memorials.map((m) => (
-                <MemorialStoryCard key={m.id} memorial={m} />
-              ))}
-            </div>
+          {/* ── Section 2: Recently added stories — vertical list ── */}
+          <section className="px-4 pt-6 pb-6 space-y-3">
+            <SectionHeader title="נוספו לאחרונה / סיפורי הנצחה" inline />
+            {stories.map((m) => (
+              <StoryCard key={m.id} memorial={m} />
+            ))}
           </section>
         </>
       )}
+    </div>
+  )
+}
+
+// ─── Small helper ─────────────────────────────────────────────────────────────
+
+function SectionHeader({
+  title,
+  inline = false,
+}: {
+  title: string
+  inline?: boolean
+}) {
+  const wrapper = inline
+    ? 'flex items-center justify-between mb-3'
+    : 'flex items-center justify-between px-4 mb-3'
+
+  return (
+    <div className={wrapper}>
+      <h2 className="text-base font-bold text-slate-800">{title}</h2>
+      <button className="text-xs font-semibold text-olive-600 hover:underline">
+        הצג הכל
+      </button>
     </div>
   )
 }
