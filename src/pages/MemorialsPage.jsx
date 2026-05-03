@@ -1,13 +1,107 @@
-import { Flame } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import SearchBar from '../components/common/SearchBar'
+import SectionHeader from '../components/common/SectionHeader'
+import FilterChip from '../components/common/FilterChip'
+import FilterSheet from '../components/common/FilterSheet'
+import NearbyMemorialCard from '../components/memorials/NearbyMemorialCard'
+import StoryCard from '../components/memorials/StoryCard'
+import { memorialSites } from '../data/mockData'
+import { FILTER_CHIPS } from '../services/memorials'
+import useChips from '../hooks/useChips'
 
 export default function MemorialsPage() {
+  const navigate = useNavigate()
+  const [chips, toggleChip] = useChips(FILTER_CHIPS)
+  const [query, setQuery] = useState('')
+  const [filterOpen, setFilterOpen] = useState(false)
+
+  const filteredSites = useMemo(() => {
+    let sites = memorialSites
+    const activeNonNearby = chips.filter(c => c.id !== 'nearby' && c.active)
+    if (activeNonNearby.length > 0) {
+      const labels = activeNonNearby.map(c => c.label)
+      sites = sites.filter(s => labels.includes(s.category))
+    }
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      sites = sites.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.city?.toLowerCase().includes(q) ||
+        s.unit?.toLowerCase().includes(q) ||
+        s.descriptionSnippet?.toLowerCase().includes(q)
+      )
+    }
+    return sites
+  }, [chips, query])
+
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-4 text-slate-500">
-      <div className="p-5 rounded-full bg-amber-50 text-amber-600">
-        <Flame size={40} strokeWidth={1.5} />
+    <div className="flex flex-col gap-4 pb-6" dir="rtl">
+
+      <div className="px-4 pt-3">
+        <SearchBar
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="חיפוש חלל, יחידה, או סיפור הנצחה..."
+          onFilterClick={() => setFilterOpen(true)}
+        />
       </div>
-      <h2 className="text-2xl font-bold text-slate-700">הנצחה</h2>
-      <p className="text-sm text-slate-400">סיפורי ואתרי ההנצחה יוצגו כאן</p>
+
+      <div className="flex flex-row-reverse gap-2 px-4 overflow-x-auto scrollbar-hide">
+        {chips.map(chip => (
+          <FilterChip
+            key={chip.id}
+            label={chip.label}
+            emoji={chip.emoji}
+            active={chip.active}
+            onClick={() => toggleChip(chip.id)}
+          />
+        ))}
+      </div>
+
+      {filteredSites.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 px-4">
+          <span className="text-4xl">🕯️</span>
+          <p className="text-base font-semibold text-slate-600">לא נמצאו תוצאות</p>
+          <p className="text-sm text-slate-400">נסה לשנות את הסינון</p>
+        </div>
+      ) : (
+        <>
+          <section>
+            <div className="px-4 mb-2.5">
+              <SectionHeader title="אתרי הנצחה בסביבתך" />
+            </div>
+            <div className="flex flex-row-reverse gap-3 px-4 overflow-x-auto scrollbar-hide">
+              {filteredSites.map(site => (
+                <NearbyMemorialCard
+                  key={site.id}
+                  memorial={site}
+                  onClick={() => navigate(`/memorials/${site.id}`)}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="px-4">
+            <SectionHeader title="נוספו לאחרונה / סיפורי הנצחה" className="mb-3" />
+            <div className="flex flex-col gap-3">
+              {filteredSites.map(site => (
+                <StoryCard
+                  key={site.id}
+                  memorial={site}
+                  onClick={() => navigate(`/memorials/${site.id}`)}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      <FilterSheet
+        isOpen={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => {}}
+      />
     </div>
   )
 }

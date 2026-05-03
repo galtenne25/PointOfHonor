@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -v \"https://api.anthropic.com/v1/design/h/_CXcoPpr_2Uhx6gkNKcBvg?open_file=Nekudat+Tziyon.html\" -o /tmp/design_out)",
+      "Bash(curl -s \"https://api.anthropic.com/v1/design/h/MoszQamjY8iP1lEearu-kQ?open_file=Nekudat+Tziyon+v2.html\" -o /tmp/nekudat_v2.html)",
+      "Bash(curl -k -s \"https://api.anthropic.com/v1/design/h/MoszQamjY8iP1lEearu-kQ?open_file=Nekudat+Tziyon+v2.html\" -o /tmp/nekudat_v2.html)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(xxd /tmp/nekudat_v2.html)",
+      "Bash(gunzip -f /tmp/nekudat_v2.html.gz)",
+      "Bash(tar -tf /tmp/nekudat_v2.html)",
+      "Bash(tar -xf /tmp/nekudat_v2.html -C /tmp/nekudat_bundle)",
+      "Bash(curl -k -s \"https://api.anthropic.com/v1/design/h/tQbJIukzjoX3_4n7mywMOA?open_file=Nekudat+Tziyon+v2.html\" -o /tmp/nekudat_v3.tgz)",
+      "Bash(tar -xf /tmp/nekudat_v3.tgz -C /tmp/nekudat_v3_bundle)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}
