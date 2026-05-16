@@ -31,14 +31,32 @@ function NotFound({ onBack }) {
   )
 }
 
+function SoldierSkeleton() {
+  return (
+    <div dir="rtl" className="flex flex-col pb-8 animate-pulse">
+      <div className="w-full h-[200px] bg-slate-200" />
+      <div className="flex flex-wrap gap-2 px-4 pt-4 justify-end">
+        {[1,2].map(i => <div key={i} className="h-6 w-24 bg-slate-200 rounded-full" />)}
+      </div>
+      <div className="flex gap-2.5 px-4 pt-4">
+        {[1,2,3].map(i => <div key={i} className="flex-1 h-10 bg-slate-200 rounded-xl" />)}
+      </div>
+      <div className="px-4 pt-6 flex flex-col gap-3">
+        {[1,2,3,4].map(i => <div key={i} className="h-3 bg-slate-200 rounded-full" />)}
+      </div>
+    </div>
+  )
+}
+
 export default function SoldierProfilePage() {
   const { id }      = useParams()
   const navigate    = useNavigate()
-  const memorial    = useMemorial(id)
+  const { memorial, loading } = useMemorial(id)
   const [activeTab,  setActiveTab   ] = useState('bio')
   const [candleOpen, setCandleOpen  ] = useState(false)
   const [reportOpen, setReportOpen  ] = useState(false)
 
+  if (loading) return <SoldierSkeleton />
   if (!memorial) return <NotFound onBack={() => navigate(-1)} />
 
   const paragraphs = memorial.fullDescription.split('\n\n').filter(Boolean)
@@ -276,6 +294,7 @@ export default function SoldierProfilePage() {
       <CandleModal
         isOpen={candleOpen}
         onClose={() => setCandleOpen(false)}
+        siteId={memorial.id}
         siteName={memorial.name}
       />
       <ReportIssueSheet

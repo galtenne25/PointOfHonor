@@ -1,5 +1,10 @@
 import { Clock, MapPin, Dumbbell } from 'lucide-react'
-import { DIFFICULTY } from '../../data/routesData'
+
+const DIFFICULTY = {
+  easy:   { label: 'קל',     color: 'text-emerald-600' },
+  medium: { label: 'בינוני', color: 'text-amber-600'   },
+  hard:   { label: 'קשה',    color: 'text-red-500'     },
+}
 
 export default function FeaturedRouteCard({ route, onClick }) {
   const diff = DIFFICULTY[route.difficulty] ?? { label: route.difficulty, color: 'text-slate-500' }

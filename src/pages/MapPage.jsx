@@ -3,27 +3,17 @@ import { MapContainer, TileLayer, Marker, useMapEvent } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
-import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed } from 'lucide-react'
-import { memorialSites } from '../data/mockData'
-import useChips from '../hooks/useChips'
+import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2 } from 'lucide-react'
+import { useApp } from '../contexts/AppContext'
 import FilterSheet from '../components/common/FilterSheet'
 
-// ── Map constants ────────────────────────────────────────────────────────────
 const ISRAEL_CENTER = [31.5, 35.0]
 const DEFAULT_ZOOM  = 7
 
-// ── Category filter chips ────────────────────────────────────────────────────
-const INITIAL_CHIPS = [
-  { id: 'חרבות ברזל',          label: 'חרבות ברזל',          emoji: '⚔️',  active: false },
-  { id: 'מלחמת ששת הימים',     label: 'ששת הימים',           emoji: '🔷',  active: false },
-  { id: 'נפגעי פעולות איבה',   label: 'פעולות איבה',         emoji: '🕯️', active: false },
-]
-
-// ── Custom map pin (teardrop + number) ───────────────────────────────────────
 function buildPinIcon(label, active = false) {
   const fill = active ? '#4c5a28' : '#3b82f6'
   return L.divIcon({
-    className: '',          // suppress leaflet-div-icon default styles
+    className: '',
     html: `
       <div style="width:32px;height:40px;position:relative;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40"
@@ -43,13 +33,11 @@ function buildPinIcon(label, active = false) {
   })
 }
 
-// ── Dismisses the selected-site popup when the map background is tapped ──────
 function MapTapHandler({ onTap }) {
   useMapEvent('click', onTap)
   return null
 }
 
-// ── Centers map on user's GPS location ───────────────────────────────────────
 function LocateControl({ onLocationError }) {
   const map = useMapEvent('locationfound', e => {
     map.flyTo(e.latlng, 14)
@@ -60,14 +48,13 @@ function LocateControl({ onLocationError }) {
   return null
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 export default function MapPage() {
   const navigate = useNavigate()
+  const { sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery } = useApp()
+
   const [selectedSite, setSelectedSite] = useState(null)
-  const [query,        setQuery       ] = useState('')
   const [filterOpen,   setFilterOpen  ] = useState(false)
   const [geoError,     setGeoError    ] = useState(false)
-  const [chips, toggleChip] = useChips(INITIAL_CHIPS)
 
   const handleMarkerClick = useCallback(site => {
     setSelectedSite(prev => (prev?.id === site.id ? null : site))
@@ -75,29 +62,13 @@ export default function MapPage() {
 
   const dismiss = useCallback(() => setSelectedSite(null), [])
 
-  const filteredSites = useMemo(() => {
-    const activeChipIds = chips.filter(c => c.active).map(c => c.id)
-    return memorialSites.filter(site => {
-      const matchesQuery =
-        !query.trim() ||
-        site.name.toLowerCase().includes(query.trim().toLowerCase()) ||
-        site.city?.toLowerCase().includes(query.trim().toLowerCase())
-
-      const matchesChip =
-        activeChipIds.length === 0 ||
-        activeChipIds.includes(site.category)
-
-      return matchesQuery && matchesChip
-    })
-  }, [query, chips])
-
+  // Build icons for ALL sites; filter at render time using filteredMapSites
   const siteIcons = useMemo(
-    () =>
-      memorialSites.map((site, idx) => ({
-        site,
-        icon: buildPinIcon(idx + 1, selectedSite?.id === site.id),
-      })),
-    [selectedSite?.id]
+    () => sites.map((site, idx) => ({
+      site,
+      icon: buildPinIcon(idx + 1, selectedSite?.id === site.id),
+    })),
+    [sites, selectedSite?.id]
   )
 
   return (
@@ -120,7 +91,7 @@ export default function MapPage() {
 
         <MarkerClusterGroup chunkedLoading>
           {siteIcons
-            .filter(({ site }) => filteredSites.some(fs => fs.id === site.id))
+            .filter(({ site }) => filteredMapSites.some(fs => fs.id === site.id))
             .map(({ site, icon }) => (
               <Marker
                 key={site.id}
@@ -132,14 +103,24 @@ export default function MapPage() {
         </MarkerClusterGroup>
       </MapContainer>
 
+      {/* ── Loading overlay ── */}
+      {sitesLoading && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1001]
+                        bg-white/90 backdrop-blur-sm rounded-full px-4 py-2
+                        flex items-center gap-2 shadow-md">
+          <Loader2 size={14} className="animate-spin text-olive-700" />
+          <span className="text-xs font-medium text-slate-600">טוען אתרים...</span>
+        </div>
+      )}
+
       {/* ── Search bar overlay ── */}
       <div className="absolute top-3 right-3 left-3 z-[1000]">
         <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 shadow-md">
           <Search size={16} className="text-slate-400 flex-shrink-0" />
           <input
             type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            value={memQuery}
+            onChange={e => setMemQuery(e.target.value)}
             placeholder="חיפוש קברים, אתרי הנצחה..."
             dir="rtl"
             className="flex-1 bg-transparent text-sm text-right text-slate-700 placeholder-slate-400 outline-none"
@@ -154,13 +135,13 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* ── Filter chips overlay ── */}
+      {/* ── Category chips ── */}
       <div className="absolute top-[3.75rem] right-0 left-0 z-[1000]
                       flex flex-row-reverse gap-2 px-3 overflow-x-auto scrollbar-hide">
-        {chips.map(chip => (
+        {mapChips.map(chip => (
           <button
             key={chip.id}
-            onClick={() => toggleChip(chip.id)}
+            onClick={() => selectMapChip(chip.id)}
             className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
               whitespace-nowrap shadow-sm transition-colors
@@ -187,37 +168,26 @@ export default function MapPage() {
       >
         {selectedSite && (
           <div className="bg-white rounded-2xl shadow-2xl p-3 flex gap-3 items-start">
-            {/* Close button */}
             <button
               onClick={dismiss}
               className="absolute top-2.5 left-3 text-slate-400 hover:text-slate-600 transition-colors z-10"
             >
               <X size={14} strokeWidth={2.5} />
             </button>
-
-            {/* Thumbnail — first in DOM → right side in RTL flex */}
             <img
               src={selectedSite.imageUrl}
               alt={selectedSite.name}
               className="w-[72px] h-[72px] rounded-xl object-cover flex-shrink-0"
             />
-
-            {/* Info — flex-1 → fills remaining space */}
             <div className="flex-1 min-w-0 flex flex-col items-end">
               <p className="text-base font-bold text-slate-800 text-right leading-tight">
                 {selectedSite.name}
               </p>
-              <p className="text-xs text-slate-500 text-right mt-0.5">
-                {selectedSite.hebrewDate}
-              </p>
-              <p className="text-xs text-slate-500 text-right">
-                {selectedSite.gregorianDate}
-              </p>
+              <p className="text-xs text-slate-500 text-right mt-0.5">{selectedSite.hebrewDate}</p>
+              <p className="text-xs text-slate-500 text-right">{selectedSite.gregorianDate}</p>
               <p className="text-xs text-slate-400 text-right">
                 {selectedSite.location},&nbsp;{selectedSite.city?.split(',')[0]}
               </p>
-
-              {/* Action buttons */}
               <div className="flex gap-2 mt-2.5">
                 <button
                   onClick={() => navigate(`/memorials/${selectedSite.id}`)}
@@ -260,7 +230,7 @@ export default function MapPage() {
         <LocateFixed size={20} strokeWidth={2.5} />
       </button>
 
-      {/* ── FAB — always visible above sticky bottom nav ── */}
+      {/* ── Add Point FAB ── */}
       <div className="absolute left-0 right-0 bottom-4 z-[999] flex justify-center">
         <button
           onClick={() => navigate('/add-point')}
@@ -274,7 +244,10 @@ export default function MapPage() {
       </div>
 
       {/* ── Geo error toast ── */}
-      <div className={`fixed top-20 left-4 right-4 max-w-md mx-auto z-[2000] flex items-center gap-3 bg-red-600 text-white px-4 py-3.5 rounded-2xl shadow-xl transition-all duration-300 ${geoError ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'}`}>
+      <div className={`fixed top-20 left-4 right-4 max-w-md mx-auto z-[2000]
+                       flex items-center gap-3 bg-red-600 text-white px-4 py-3.5 rounded-2xl
+                       shadow-xl transition-all duration-300
+                       ${geoError ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'}`}>
         <span className="text-xl">📍</span>
         <p className="text-sm font-semibold">לא ניתן לאתר את המיקום שלך. ודא שהרשאות ה-GPS מופעלות.</p>
         <button onClick={() => setGeoError(false)} className="mr-auto text-white/80 hover:text-white">

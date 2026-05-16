@@ -25,13 +25,34 @@ function NotFound({ onBack }) {
   );
 }
 
+function DetailSkeleton() {
+  return (
+    <div dir="rtl" className="flex flex-col animate-pulse">
+      <div className="w-full h-56 bg-slate-200" />
+      <div className="px-5 pt-5 pb-8 flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <div className="h-6 w-3/4 bg-slate-200 rounded-full self-end" />
+          <div className="h-3 w-1/2 bg-slate-200 rounded-full self-end" />
+        </div>
+        <div className="flex gap-2.5">
+          {[1,2,3].map(i => <div key={i} className="flex-1 h-10 bg-slate-200 rounded-xl" />)}
+        </div>
+        <div className="flex flex-col gap-3">
+          {[1,2,3,4].map(i => <div key={i} className="h-3 bg-slate-200 rounded-full" />)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function MemorialDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const memorial = useMemorial(id);
+  const { memorial, loading } = useMemorial(id);
   const [candleOpen,  setCandleOpen ] = useState(false);
   const [reportOpen,  setReportOpen ] = useState(false);
 
+  if (loading) return <DetailSkeleton />;
   if (!memorial) {
     return <NotFound onBack={() => navigate('/memorials')} />;
   }
@@ -181,6 +202,7 @@ export default function MemorialDetailPage() {
       <CandleModal
         isOpen={candleOpen}
         onClose={() => setCandleOpen(false)}
+        siteId={memorial.id}
         siteName={memorial.name}
       />
       <ReportIssueSheet

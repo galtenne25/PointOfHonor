@@ -14,7 +14,7 @@ const FALLBACK_WAYPOINTS = [
 export default function ActiveNavigationPage() {
   const { id }   = useParams()
   const navigate = useNavigate()
-  const route    = useRoute(id)
+  const { route } = useRoute(id)
   const { formattedTime, offRoute, setOffRoute, offline, setOffline } = useActiveNavigation()
   const [peekOpen, setPeekOpen] = useState(false)
 

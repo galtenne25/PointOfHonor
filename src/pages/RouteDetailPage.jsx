@@ -1,9 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Navigation2 } from 'lucide-react';
-import { ChevronRight, Clock, MapPin, Dumbbell } from 'lucide-react';
+import { Navigation2, ChevronRight, Clock, MapPin, Dumbbell } from 'lucide-react';
 import { useRoute } from '../hooks/useRoute';
-import { DIFFICULTY } from '../data/routesData';
 import RouteTimeline from '../components/routes/RouteTimeline';
+
+// Inlined — no longer imported from routesData
+const DIFFICULTY = {
+  easy:   { label: 'קל',     color: 'text-emerald-600' },
+  medium: { label: 'בינוני', color: 'text-amber-600'   },
+  hard:   { label: 'קשה',    color: 'text-red-500'     },
+}
 
 function NotFound({ onBack }) {
   return (
@@ -25,12 +30,37 @@ function NotFound({ onBack }) {
   );
 }
 
+function RouteSkeleton() {
+  return (
+    <div dir="rtl" className="flex flex-col animate-pulse">
+      <div className="w-full h-52 bg-slate-200" />
+      <div className="-mt-4 bg-white rounded-t-2xl px-5 pt-5 pb-10 flex flex-col gap-5">
+        <div className="h-6 w-3/4 bg-slate-200 rounded-full self-end" />
+        <div className="flex gap-2">
+          {[1,2,3].map(i => <div key={i} className="h-8 w-24 bg-slate-200 rounded-full" />)}
+        </div>
+        <div className="h-px bg-slate-100" />
+        {[1,2,3].map(i => (
+          <div key={i} className="flex gap-3">
+            <div className="w-8 h-8 bg-slate-200 rounded-full flex-shrink-0" />
+            <div className="flex-1 flex flex-col gap-2 pt-1">
+              <div className="h-3 w-2/3 bg-slate-200 rounded-full" />
+              <div className="h-3 w-1/2 bg-slate-200 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function RouteDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
-  const route    = useRoute(id);
+  const { route, loading } = useRoute(id);
 
-  if (!route) return <NotFound onBack={() => navigate('/routes')} />;
+  if (loading) return <RouteSkeleton />;
+  if (!route)  return <NotFound onBack={() => navigate('/routes')} />;
 
   const diff = DIFFICULTY[route.difficulty] ?? { label: route.difficulty, color: 'text-slate-500' };
 
@@ -44,11 +74,7 @@ export default function RouteDetailPage() {
           alt="מפת המסלול"
           className="w-full h-52 object-cover"
         />
-
-        {/* Gradient overlay so the back button stays readable */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent pointer-events-none" />
-
-        {/* Back button */}
         <button
           onClick={() => navigate(-1)}
           aria-label="חזרה"
@@ -62,15 +88,13 @@ export default function RouteDetailPage() {
         </button>
       </div>
 
-      {/* ── Content card — overlaps the map bottom ── */}
+      {/* ── Content card ── */}
       <div className="-mt-4 bg-white rounded-t-2xl px-5 pt-5 pb-10 flex flex-col gap-5">
 
-        {/* Title */}
         <h1 className="text-[1.15rem] font-bold text-slate-800 text-right leading-snug">
           {route.title}
         </h1>
 
-        {/* Meta pills */}
         <div className="flex gap-2 flex-wrap">
           <span className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-full
                            text-xs text-slate-600 bg-slate-50">
@@ -91,10 +115,8 @@ export default function RouteDetailPage() {
 
         <hr className="border-slate-100" />
 
-        {/* Waypoints timeline */}
         <RouteTimeline waypoints={route.waypoints} />
 
-        {/* Start navigation CTA */}
         <button
           onClick={() => navigate(`/routes/${id}/navigate`)}
           className="w-full py-4 bg-olive-700 text-white text-sm font-bold rounded-2xl

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import SearchBar from '../components/common/SearchBar'
@@ -6,38 +6,28 @@ import SectionHeader from '../components/common/SectionHeader'
 import FilterChip from '../components/common/FilterChip'
 import FeaturedRouteCard from '../components/routes/FeaturedRouteCard'
 import RouteListItem from '../components/routes/RouteListItem'
-import { routes } from '../data/routesData'
-import { ROUTE_FILTER_CHIPS } from '../services/routes'
-import useChips from '../hooks/useChips'
+import { useApp } from '../contexts/AppContext'
+
+function RoutesSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 px-4">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 animate-pulse">
+          <div className="w-16 h-16 bg-slate-200 rounded-xl flex-shrink-0" />
+          <div className="flex-1 flex flex-col gap-2 justify-center">
+            <div className="w-3/4 h-4 bg-slate-200 rounded-full" />
+            <div className="w-1/2 h-3 bg-slate-200 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function RoutesPage() {
   const navigate = useNavigate()
-  const [chips, toggleChip] = useChips(ROUTE_FILTER_CHIPS)
-  const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const filteredRoutes = useMemo(() => {
-    let result = routes
-    const activeNonNearby = chips.filter(c => c.id !== 'nearby' && c.active)
-    if (activeNonNearby.length > 0) {
-      const labels = activeNonNearby.map(c => c.label)
-      result = result.filter(r => labels.includes(r.category))
-    }
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      result = result.filter(r =>
-        r.title.toLowerCase().includes(q) ||
-        r.description?.toLowerCase().includes(q) ||
-        r.startLocation?.toLowerCase().includes(q)
-      )
-    }
-    return result
-  }, [chips, query])
+  const { filteredRoutes, routesLoading, routesError, routeChips, selectRouteChip, routesQuery, setRoutesQuery } = useApp()
+  const [filterOpen, setFilterOpen] = useState(false)
 
   const featuredRoutes = filteredRoutes.filter(r => r.featured)
   const natureRoutes   = filteredRoutes.filter(r => r.category === 'טבע והנצחה')
@@ -47,35 +37,31 @@ export default function RoutesPage() {
 
       <div className="px-4 pt-3">
         <SearchBar
-          value={query}
-          onChange={e => setQuery(e.target.value)}
+          value={routesQuery}
+          onChange={e => setRoutesQuery(e.target.value)}
           placeholder="חיפוש מסלול, חטיבה, אזור..."
         />
       </div>
 
       <div className="flex flex-row-reverse gap-2 px-4 overflow-x-auto scrollbar-hide">
-        {chips.map(chip => (
+        {routeChips.map(chip => (
           <FilterChip
             key={chip.id}
             label={chip.label}
             emoji={chip.emoji}
             active={chip.active}
-            onClick={() => toggleChip(chip.id)}
+            onClick={() => selectRouteChip(chip.id)}
           />
         ))}
       </div>
 
-      {loading ? (
-        <div className="flex flex-col gap-3 px-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 animate-pulse">
-              <div className="w-16 h-16 bg-slate-200 rounded-xl flex-shrink-0" />
-              <div className="flex-1 flex flex-col gap-2 justify-center">
-                <div className="w-3/4 h-4 bg-slate-200 rounded-full" />
-                <div className="w-1/2 h-3 bg-slate-200 rounded-full" />
-              </div>
-            </div>
-          ))}
+      {routesLoading ? (
+        <RoutesSkeleton />
+      ) : routesError ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 px-4">
+          <span className="text-4xl">⚠️</span>
+          <p className="text-base font-semibold text-slate-600">שגיאה בטעינת המסלולים</p>
+          <p className="text-sm text-slate-400 text-center">{routesError}</p>
         </div>
       ) : filteredRoutes.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-16 px-4">

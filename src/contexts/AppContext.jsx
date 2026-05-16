@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react'
-import { memorialSites } from '../data/mockData'
-import { routes } from '../data/routesData'
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react'
+import { getMemorials, addMemorial as dbAddMemorial } from '../services/memorials'
+import { getRoutes }                                   from '../services/routes'
+import { getCandleCounts, insertCandleActivity }       from '../services/community'
 
-// ── Chip id → data category string ───────────────────────────────────────────
+// ── Chip id → DB category string ─────────────────────────────────────────────
 const CATEGORY = {
   iron:      'חרבות ברזל',
   six_days:  'מלחמת ששת הימים',
@@ -31,9 +32,6 @@ const ROUTE_CHIPS_INIT = [
   { id: 'nature', label: 'טבע והנצחה',  emoji: '🌿',  active: false },
 ]
 
-// Candle counts per site id — seeded with realistic numbers
-const INITIAL_CANDLES = { 1: 1247, 2: 831, 3: 2456, 4: 543, 5: 389 }
-
 // ── Radio-chip hook: only one chip active at a time ───────────────────────────
 function useRadioChips(init) {
   const [chips, setChips] = useState(init)
@@ -41,11 +39,9 @@ function useRadioChips(init) {
   const select = useCallback(id => {
     setChips(prev => {
       const isActive = prev.find(c => c.id === id)?.active
-      // Clicking active chip or "all" → reset to "all"
       if (id === 'all' || isActive) {
         return prev.map(c => ({ ...c, active: c.id === 'all' }))
       }
-      // Otherwise activate the clicked chip exclusively
       return prev.map(c => ({ ...c, active: c.id === id }))
     })
   }, [])
@@ -93,48 +89,102 @@ function applyRouteFilters(list, chips, query) {
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
-  // Shared search query for memorials (synced between Map + Memorials tabs)
+  // ── Remote data ──
+  const [sites,         setSites        ] = useState([])
+  const [routes,        setRoutes       ] = useState([])
+  const [sitesLoading,  setSitesLoading ] = useState(true)
+  const [routesLoading, setRoutesLoading] = useState(true)
+  const [sitesError,    setSitesError   ] = useState(null)
+  const [routesError,   setRoutesError  ] = useState(null)
+
+  useEffect(() => {
+    getMemorials()
+      .then(setSites)
+      .catch(err => setSitesError(err.message ?? 'שגיאה בטעינת אתרי הנצחה'))
+      .finally(() => setSitesLoading(false))
+  }, [])
+
+  useEffect(() => {
+    getRoutes()
+      .then(setRoutes)
+      .catch(err => setRoutesError(err.message ?? 'שגיאה בטעינת מסלולים'))
+      .finally(() => setRoutesLoading(false))
+  }, [])
+
+  // ── Candle counts (DB-backed) ──
+  const [candleCounts, setCandleCounts] = useState({})
+
+  useEffect(() => {
+    getCandleCounts()
+      .then(setCandleCounts)
+      .catch(() => {})
+  }, [])
+
+  // ── UI state ──
   const [memQuery,    setMemQuery   ] = useState('')
   const [routesQuery, setRoutesQuery] = useState('')
-  const [candleCounts, setCandleCounts] = useState(INITIAL_CANDLES)
 
   const [mapChips,   selectMapChip  ] = useRadioChips(MAP_CHIPS_INIT)
   const [memChips,   selectMemChip  ] = useRadioChips(MEM_CHIPS_INIT)
   const [routeChips, selectRouteChip] = useRadioChips(ROUTE_CHIPS_INIT)
 
-  const lightCandle = useCallback(siteId => {
-    setCandleCounts(prev => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }))
+  // ── Write: add memorial ───────────────────────────────────────────────────
+  const addMemorial = useCallback(async (formData) => {
+    const newSite = await dbAddMemorial(formData)  // throws on error
+    setSites(prev => [newSite, ...prev])
+    return newSite
   }, [])
 
-  // Derived: filtered memorial list (Memorials page)
+  // ── Write: light a candle ─────────────────────────────────────────────────
+  const lightCandle = useCallback(async (siteId, siteName) => {
+    // Optimistic local increment so the counter updates immediately
+    setCandleCounts(prev => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }))
+    try {
+      await insertCandleActivity(siteId, siteName)
+    } catch {
+      // Roll back optimistic update on failure
+      setCandleCounts(prev => ({ ...prev, [siteId]: Math.max(0, (prev[siteId] ?? 1) - 1) }))
+    }
+  }, [])
+
+  // ── Derived: filtered lists ───────────────────────────────────────────────
   const filteredSites = useMemo(
-    () => applySiteFilters(memorialSites, memChips, memQuery),
-    [memChips, memQuery]
+    () => applySiteFilters(sites, memChips, memQuery),
+    [sites, memChips, memQuery]
   )
 
-  // Derived: filtered memorial markers (Map page — uses mapChips)
   const filteredMapSites = useMemo(
-    () => applySiteFilters(memorialSites, mapChips, memQuery),
-    [mapChips, memQuery]
+    () => applySiteFilters(sites, mapChips, memQuery),
+    [sites, mapChips, memQuery]
   )
 
-  // Derived: filtered routes (Routes page)
   const filteredRoutes = useMemo(
     () => applyRouteFilters(routes, routeChips, routesQuery),
-    [routeChips, routesQuery]
+    [routes, routeChips, routesQuery]
   )
 
   return (
     <AppContext.Provider value={{
-      memQuery,      setMemQuery,
-      routesQuery,   setRoutesQuery,
-      mapChips,      selectMapChip,
-      memChips,      selectMemChip,
-      routeChips,    selectRouteChip,
+      // data
+      sites,          routes,
+      sitesLoading,   routesLoading,
+      sitesError,     routesError,
+      // search
+      memQuery,       setMemQuery,
+      routesQuery,    setRoutesQuery,
+      // chips
+      mapChips,       selectMapChip,
+      memChips,       selectMemChip,
+      routeChips,     selectRouteChip,
+      // derived
       filteredSites,
       filteredMapSites,
       filteredRoutes,
-      candleCounts,  lightCandle,
+      // candles
+      candleCounts,
+      lightCandle,
+      // write
+      addMemorial,
     }}>
       {children}
     </AppContext.Provider>

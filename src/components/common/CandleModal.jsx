@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
+import { useApp } from '../../contexts/AppContext'
 
-export default function CandleModal({ isOpen, onClose, siteName }) {
+export default function CandleModal({ isOpen, onClose, siteId, siteName }) {
+  const { lightCandle } = useApp()
   const [name,       setName      ] = useState('')
   const [dedication, setDedication] = useState('')
   const [submitted,  setSubmitted ] = useState(false)
@@ -19,6 +21,7 @@ export default function CandleModal({ isOpen, onClose, siteName }) {
   function handleSubmit() {
     if (!name.trim()) return
     setSubmitted(true)
+    lightCandle(siteId, siteName)
   }
 
   return (

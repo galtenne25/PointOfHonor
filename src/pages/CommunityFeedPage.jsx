@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Bell, Flame, Check, MapPin, FileText } from 'lucide-react'
-import { feedItems } from '../data/communityData'
+import { getCommunityActivities } from '../services/community'
 
 const FILTERS = [
   { id: 'all',    label: 'הכל'     },
@@ -26,13 +26,36 @@ function ActivityBadge({ type }) {
   )
 }
 
+function FeedSkeleton() {
+  return (
+    <>
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100
+                                flex items-center gap-3 animate-pulse">
+          <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0" />
+          <div className="flex-1 flex flex-col gap-2">
+            <div className="h-3 w-3/4 bg-slate-200 rounded-full self-end" />
+            <div className="h-3 w-1/2 bg-slate-200 rounded-full self-end" />
+          </div>
+          <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0" />
+        </div>
+      ))}
+    </>
+  )
+}
+
 export default function CommunityFeedPage() {
   const [activeFilter, setActiveFilter] = useState('all')
-  const [loading, setLoading] = useState(true)
+  const [feedItems,    setFeedItems   ] = useState([])
+  const [loading,      setLoading     ] = useState(true)
+  const [error,        setError       ] = useState(null)
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800)
-    return () => clearTimeout(timer)
+    setLoading(true)
+    getCommunityActivities()
+      .then(setFeedItems)
+      .catch(err => setError(err.message ?? 'שגיאה בטעינת הפעילות'))
+      .finally(() => setLoading(false))
   }, [])
 
   const visible = activeFilter === 'all'
@@ -45,7 +68,6 @@ export default function CommunityFeedPage() {
       {/* ── Header ── */}
       <div className="bg-white border-b border-slate-200 px-4 pt-4 pb-0 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3">
-          {/* Live indicator — first in DOM → RIGHT in RTL */}
           <div className="flex items-center gap-1.5">
             <div
               className="w-2 h-2 rounded-full bg-green-500"
@@ -53,16 +75,12 @@ export default function CommunityFeedPage() {
             />
             <span className="text-xs font-semibold text-green-500">חי</span>
           </div>
-
           <h1 className="text-base font-bold text-slate-800">פעילות הקהילה</h1>
-
-          {/* Bell — last in DOM → LEFT in RTL */}
           <button className="text-slate-400 hover:text-slate-600 transition-colors active:scale-95">
             <Bell size={20} strokeWidth={1.8} />
           </button>
         </div>
 
-        {/* Filter chips */}
         <div className="flex flex-row-reverse gap-2 overflow-x-auto scrollbar-hide pb-3">
           {FILTERS.map(f => (
             <button
@@ -83,9 +101,9 @@ export default function CommunityFeedPage() {
       {/* ── Stats bar ── */}
       <div className="flex bg-white border-b border-slate-200">
         {[
-          { value: '1,247', label: 'נרות הודלקו'     },
-          { value: '348',   label: 'מסלולים הושלמו'  },
-          { value: '89',    label: 'סיפורים נוספו'   },
+          { value: '1,247', label: 'נרות הודלקו'    },
+          { value: '348',   label: 'מסלולים הושלמו' },
+          { value: '89',    label: 'סיפורים נוספו'  },
         ].map((stat, i) => (
           <div
             key={i}
@@ -100,58 +118,55 @@ export default function CommunityFeedPage() {
       {/* ── Feed ── */}
       <div className="flex flex-col gap-2 px-4 py-3">
         {loading ? (
-          [1, 2, 3].map(i => (
-            <div key={i} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 animate-pulse">
-              <div className="w-16 h-16 bg-slate-200 rounded-xl flex-shrink-0" />
-              <div className="flex-1 flex flex-col gap-2 justify-center">
-                <div className="w-3/4 h-4 bg-slate-200 rounded-full" />
-                <div className="w-1/2 h-3 bg-slate-200 rounded-full" />
+          <FeedSkeleton />
+        ) : error ? (
+          <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
+            <span className="text-4xl">⚠️</span>
+            <p className="text-sm font-medium text-slate-500">שגיאה בטעינת הפעילות</p>
+            <p className="text-xs text-slate-400 text-center">{error}</p>
+          </div>
+        ) : (
+          <>
+            {visible.map((item, idx) => (
+              <div
+                key={item.id}
+                className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100 flex items-center gap-3"
+                style={{ animation: `fadeSlideIn 0.3s ease-out ${idx * 0.05}s both` }}
+              >
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center
+                             text-white text-sm font-bold flex-shrink-0"
+                  style={{ backgroundColor: item.color }}
+                >
+                  {item.initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-800 leading-snug text-right">
+                    <span className="font-bold">{item.name}</span>
+                    {' '}{item.action}{' '}
+                    <span className="font-bold text-olive-700">{item.site}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 text-right">{item.time}</p>
+                </div>
+                <ActivityBadge type={item.type} />
               </div>
-            </div>
-          ))
-        ) : visible.map((item, idx) => (
-          <div
-            key={item.id}
-            className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100 flex items-center gap-3"
-            style={{ animation: `fadeSlideIn 0.3s ease-out ${idx * 0.05}s both` }}
-          >
-            {/* Avatar — first in DOM → RIGHT in RTL */}
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center
-                         text-white text-sm font-bold flex-shrink-0"
-              style={{ backgroundColor: item.color }}
+            ))}
+
+            {visible.length === 0 && (
+              <div className="flex flex-col items-center py-16 text-slate-400">
+                <p className="text-sm">אין פעילות בקטגוריה זו כרגע</p>
+              </div>
+            )}
+
+            <button
+              className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200
+                         text-sm text-slate-400 font-medium mt-1
+                         hover:border-slate-300 hover:text-slate-500 active:scale-95 transition-all duration-150"
             >
-              {item.initials}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-slate-800 leading-snug text-right">
-                <span className="font-bold">{item.name}</span>
-                {' '}{item.action}{' '}
-                <span className="font-bold text-olive-700">{item.site}</span>
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5 text-right">{item.time}</p>
-            </div>
-
-            {/* Badge — last in DOM → LEFT in RTL */}
-            <ActivityBadge type={item.type} />
-          </div>
-        ))}
-
-        {visible.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-400">
-            <p className="text-sm">אין פעילות בקטגוריה זו כרגע</p>
-          </div>
+              טען פעילויות נוספות
+            </button>
+          </>
         )}
-
-        <button
-          className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200
-                     text-sm text-slate-400 font-medium mt-1
-                     hover:border-slate-300 hover:text-slate-500 active:scale-95 transition-all duration-150"
-        >
-          טען פעילויות נוספות
-        </button>
       </div>
 
     </div>

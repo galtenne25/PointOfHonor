@@ -3,15 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Upload, MapPin, CheckCircle, Loader2, X } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvent } from 'react-leaflet'
 import L from 'leaflet'
+import { useApp } from '../contexts/AppContext'
 
 export default function AddPointPage() {
-  const navigate = useNavigate()
+  const navigate    = useNavigate()
+  const { addMemorial } = useApp()
   const toastTimerRef = useRef(null)
 
   const [form,           setForm          ] = useState({ name: '', description: '' })
   const [images,         setImages        ] = useState([])
   const [isSubmitting,   setIsSubmitting  ] = useState(false)
   const [showToast,      setShowToast     ] = useState(false)
+  const [submitError,    setSubmitError   ] = useState(null)
   const [pickedLocation, setPickedLocation] = useState(null)
   const [mapModalOpen,   setMapModalOpen  ] = useState(false)
   const [errors,         setErrors        ] = useState({})
@@ -38,28 +41,39 @@ export default function AddPointPage() {
     e.preventDefault()
     const newErrors = {}
     if (!form.name.trim()) newErrors.name = 'יש להזין את שם האתר'
-    if (!pickedLocation) newErrors.location = 'יש לבחור מיקום על המפה'
+    if (!pickedLocation)   newErrors.location = 'יש לבחור מיקום על המפה'
     if (form.description.trim().length < 10) newErrors.description = 'התיאור חייב להכיל לפחות 10 תווים'
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
     }
     setErrors({})
+    setSubmitError(null)
     setIsSubmitting(true)
 
-    await new Promise(r => setTimeout(r, 1200))
+    try {
+      await addMemorial({
+        name:        form.name.trim(),
+        description: form.description.trim(),
+        location:    pickedLocation,
+        imageFiles:  images.map(img => img.file),
+      })
 
-    setIsSubmitting(false)
-    setForm({ name: '', description: '' })
-    setImages([])
-    setPickedLocation(null)
-    setShowToast(true)
+      setForm({ name: '', description: '' })
+      setImages([])
+      setPickedLocation(null)
+      setShowToast(true)
 
-    toastTimerRef.current = setTimeout(() => {
-      setShowToast(false)
-      navigate('/map')
-    }, 2000)
-  }, [navigate, form, pickedLocation])
+      toastTimerRef.current = setTimeout(() => {
+        setShowToast(false)
+        navigate('/map')
+      }, 2000)
+    } catch (err) {
+      setSubmitError(err.message ?? 'שגיאה בשמירת הנקודה. נסה שנית.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [navigate, addMemorial, form, pickedLocation, images])
 
   return (
     <div dir="rtl" className="flex flex-col min-h-full">
@@ -175,6 +189,11 @@ export default function AddPointPage() {
           />
           {errors.description && <span className="text-xs text-red-500 mt-1">{errors.description}</span>}
         </Field>
+
+        {/* Server error */}
+        {submitError && (
+          <p className="text-sm text-red-500 text-center font-medium">{submitError}</p>
+        )}
 
         {/* Submit */}
         <button

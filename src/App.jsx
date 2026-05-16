@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { AppProvider } from './contexts/AppContext'
 import Layout from './components/Layout'
 import MapPage from './pages/MapPage'
 import MemorialsPage from './pages/MemorialsPage'
@@ -26,6 +27,7 @@ export default function App() {
   }, [])
 
   return (
+    <AppProvider>
     <Routes>
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/routes/:id/navigate" element={<ActiveNavigationPage />} />
@@ -43,5 +45,6 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
+    </AppProvider>
   )
 }
