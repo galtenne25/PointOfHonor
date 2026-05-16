@@ -1,7 +1,11 @@
-import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { getMemorials, addMemorial as dbAddMemorial } from '../services/memorials'
 import { getRoutes }                                   from '../services/routes'
-import { getCandleCounts, insertCandleActivity }       from '../services/community'
+import {
+  getCandleCounts,
+  insertCandleActivity,
+  subscribeToActivityInserts,
+} from '../services/community'
 
 // ── Chip id → DB category string ─────────────────────────────────────────────
 const CATEGORY = {
@@ -32,7 +36,7 @@ const ROUTE_CHIPS_INIT = [
   { id: 'nature', label: 'טבע והנצחה',  emoji: '🌿',  active: false },
 ]
 
-// ── Radio-chip hook: only one chip active at a time ───────────────────────────
+// ── Radio-chip hook ───────────────────────────────────────────────────────────
 function useRadioChips(init) {
   const [chips, setChips] = useState(init)
 
@@ -89,7 +93,7 @@ function applyRouteFilters(list, chips, query) {
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
-  // ── Remote data ──
+  // ── Remote data ──────────────────────────────────────────────────────────
   const [sites,         setSites        ] = useState([])
   const [routes,        setRoutes       ] = useState([])
   const [sitesLoading,  setSitesLoading ] = useState(true)
@@ -111,7 +115,7 @@ export function AppProvider({ children }) {
       .finally(() => setRoutesLoading(false))
   }, [])
 
-  // ── Candle counts (DB-backed) ──
+  // ── Candle counts (DB-backed, server-side aggregation) ───────────────────
   const [candleCounts, setCandleCounts] = useState({})
 
   useEffect(() => {
@@ -120,7 +124,35 @@ export function AppProvider({ children }) {
       .catch(() => {})
   }, [])
 
-  // ── UI state ──
+  // Tracks IDs of candle activities inserted by this client so the realtime
+  // echo for our own inserts doesn't double-count the optimistic increment.
+  const pendingCandleIds = useRef(new Set())
+
+  // ── Realtime: candle count sync from other users ──────────────────────────
+  useEffect(() => {
+    const unsubscribe = subscribeToActivityInserts(
+      'rt-candle-counts',
+      (payload) => {
+        const { id, action_type, site_id } = payload.new
+        if (action_type !== 'candle' || site_id == null) return
+
+        if (pendingCandleIds.current.has(id)) {
+          // Our own insert echoed back — already counted optimistically
+          pendingCandleIds.current.delete(id)
+          return
+        }
+
+        // Another user lit a candle — increment live
+        setCandleCounts(prev => ({
+          ...prev,
+          [site_id]: (prev[site_id] ?? 0) + 1,
+        }))
+      }
+    )
+    return unsubscribe
+  }, [])
+
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [memQuery,    setMemQuery   ] = useState('')
   const [routesQuery, setRoutesQuery] = useState('')
 
@@ -130,20 +162,28 @@ export function AppProvider({ children }) {
 
   // ── Write: add memorial ───────────────────────────────────────────────────
   const addMemorial = useCallback(async (formData) => {
-    const newSite = await dbAddMemorial(formData)  // throws on error
+    const newSite = await dbAddMemorial(formData)  // throws on any error; rollback handled in service
     setSites(prev => [newSite, ...prev])
     return newSite
   }, [])
 
-  // ── Write: light a candle ─────────────────────────────────────────────────
+  // ── Write: light a candle (optimistic + DB + realtime dedup) ─────────────
   const lightCandle = useCallback(async (siteId, siteName) => {
-    // Optimistic local increment so the counter updates immediately
+    // 1. Optimistic local increment for instant feedback
     setCandleCounts(prev => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }))
+
     try {
-      await insertCandleActivity(siteId, siteName)
+      // 2. Persist to DB; returns the new row id
+      const id = await insertCandleActivity(siteId, siteName)
+
+      // 3. Register the id so the realtime subscription skips it
+      pendingCandleIds.current.add(id)
     } catch {
-      // Roll back optimistic update on failure
-      setCandleCounts(prev => ({ ...prev, [siteId]: Math.max(0, (prev[siteId] ?? 1) - 1) }))
+      // 4. Roll back optimistic increment on failure
+      setCandleCounts(prev => ({
+        ...prev,
+        [siteId]: Math.max(0, (prev[siteId] ?? 1) - 1),
+      }))
     }
   }, [])
 

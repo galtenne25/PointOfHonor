@@ -15,7 +15,7 @@ function relativeTime(iso) {
   const hours = Math.floor(minutes / 60)
   if (hours   < 24) return `לפני ${hours} שעות`
   const days  = Math.floor(hours / 24)
-  if (days    === 1) return 'אתמול'
+  if (days === 1)   return 'אתמול'
   return `לפני ${days} ימים`
 }
 
@@ -34,6 +34,7 @@ function mapActivity(row) {
   }
 }
 
+// ── Read: activity feed ───────────────────────────────────────────────────────
 export async function getCommunityActivities(limit = 30) {
   const { data, error } = await supabase
     .from('community_activities')
@@ -45,26 +46,35 @@ export async function getCommunityActivities(limit = 30) {
   return data.map(mapActivity)
 }
 
-// ── Returns { [siteId]: count } for all candle activities ─────────────────────
-export async function getCandleCounts() {
+// Fetches one activity with its profile join; used by the realtime handler
+// to hydrate a raw INSERT payload into the full UI shape.
+export async function getActivityById(id) {
   const { data, error } = await supabase
     .from('community_activities')
-    .select('site_id')
-    .eq('action_type', 'candle')
+    .select('*, profiles(full_name, initials, avatar_color)')
+    .eq('id', id)
+    .single()
 
+  if (error) return null
+  return mapActivity(data)
+}
+
+// ── Read: candle counts (server-side GROUP BY via RPC) ────────────────────────
+// Requires the `get_candle_counts` SQL function to exist in Supabase.
+export async function getCandleCounts() {
+  const { data, error } = await supabase.rpc('get_candle_counts')
   if (error) throw error
 
   return (data ?? []).reduce((acc, row) => {
-    if (row.site_id != null) {
-      acc[row.site_id] = (acc[row.site_id] ?? 0) + 1
-    }
+    acc[row.site_id] = Number(row.count)
     return acc
   }, {})
 }
 
-// ── Insert a candle activity; user_id is null until auth is wired up ──────────
+// ── Write: insert a candle activity; returns the new row's id ─────────────────
+// user_id is null until auth is implemented.
 export async function insertCandleActivity(siteId, siteName) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('community_activities')
     .insert({
       action_type: 'candle',
@@ -72,6 +82,25 @@ export async function insertCandleActivity(siteId, siteName) {
       target_name: siteName,
       user_id:     null,
     })
+    .select('id')
+    .single()
 
   if (error) throw error
+  return data.id  // returned so AppContext can de-duplicate the realtime echo
+}
+
+// ── Realtime: subscribe to all community_activity INSERTs ─────────────────────
+// Returns an unsubscribe function — call it in useEffect cleanup.
+// `channelName` must be unique per subscription (caller's responsibility).
+export function subscribeToActivityInserts(channelName, callback) {
+  const channel = supabase
+    .channel(channelName)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'community_activities' },
+      (payload) => { Promise.resolve(callback(payload)).catch(console.error) }
+    )
+    .subscribe()
+
+  return () => supabase.removeChannel(channel)
 }

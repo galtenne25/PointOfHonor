@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Bell, Flame, Check, MapPin, FileText } from 'lucide-react'
-import { getCommunityActivities } from '../services/community'
+import {
+  getCommunityActivities,
+  getActivityById,
+  subscribeToActivityInserts,
+} from '../services/community'
 
 const FILTERS = [
   { id: 'all',    label: 'הכל'     },
@@ -50,12 +54,31 @@ export default function CommunityFeedPage() {
   const [loading,      setLoading     ] = useState(true)
   const [error,        setError       ] = useState(null)
 
+  // Initial fetch
   useEffect(() => {
     setLoading(true)
     getCommunityActivities()
       .then(setFeedItems)
       .catch(err => setError(err.message ?? 'שגיאה בטעינת הפעילות'))
       .finally(() => setLoading(false))
+  }, [])
+
+  // Realtime: prepend new activities as they arrive from any user
+  useEffect(() => {
+    const unsubscribe = subscribeToActivityInserts(
+      'rt-community-feed',
+      async (payload) => {
+        const activity = await getActivityById(payload.new.id)
+        if (!activity) return
+        setFeedItems(prev =>
+          // De-duplicate in case the initial fetch and the realtime event race
+          prev.some(item => item.id === activity.id)
+            ? prev
+            : [activity, ...prev]
+        )
+      }
+    )
+    return unsubscribe
   }, [])
 
   const visible = activeFilter === 'all'
