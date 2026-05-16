@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import MapPage from './pages/MapPage'
@@ -14,7 +15,15 @@ import CommunityFeedPage from './pages/CommunityFeedPage'
 import ActiveNavigationPage from './pages/ActiveNavigationPage'
 
 export default function App() {
-  const isOnboarded = localStorage.getItem('ntz_onboarded')
+  const [isOnboarded, setIsOnboarded] = useState(
+    () => !!localStorage.getItem('ntz_onboarded')
+  )
+
+  useEffect(() => {
+    const handler = () => setIsOnboarded(true)
+    window.addEventListener('ntz:onboarded', handler)
+    return () => window.removeEventListener('ntz:onboarded', handler)
+  }, [])
 
   return (
     <Routes>

@@ -13,10 +13,9 @@ const DEFAULT_ZOOM  = 7
 
 // ── Category filter chips ────────────────────────────────────────────────────
 const INITIAL_CHIPS = [
-  { id: 'trails',    label: 'מסלולי הליכה', emoji: null,  active: false },
-  { id: 'monuments', label: 'אנדרטאות',     emoji: '🔥',  active: false },
-  { id: 'lookouts',  label: 'מצפים',        emoji: '👁️', active: false },
-  { id: 'springs',   label: 'מעיינות',      emoji: '💧',  active: true  },
+  { id: 'חרבות ברזל',          label: 'חרבות ברזל',          emoji: '⚔️',  active: false },
+  { id: 'מלחמת ששת הימים',     label: 'ששת הימים',           emoji: '🔷',  active: false },
+  { id: 'נפגעי פעולות איבה',   label: 'פעולות איבה',         emoji: '🕯️', active: false },
 ]
 
 // ── Custom map pin (teardrop + number) ───────────────────────────────────────
@@ -64,13 +63,20 @@ export default function MapPage() {
   const dismiss = useCallback(() => setSelectedSite(null), [])
 
   const filteredSites = useMemo(() => {
-    if (!query.trim()) return memorialSites
-    const q = query.trim().toLowerCase()
-    return memorialSites.filter(s =>
-      s.name.toLowerCase().includes(q) ||
-      s.city?.toLowerCase().includes(q)
-    )
-  }, [query])
+    const activeChipIds = chips.filter(c => c.active).map(c => c.id)
+    return memorialSites.filter(site => {
+      const matchesQuery =
+        !query.trim() ||
+        site.name.toLowerCase().includes(query.trim().toLowerCase()) ||
+        site.city?.toLowerCase().includes(query.trim().toLowerCase())
+
+      const matchesChip =
+        activeChipIds.length === 0 ||
+        activeChipIds.includes(site.category)
+
+      return matchesQuery && matchesChip
+    })
+  }, [query, chips])
 
   const siteIcons = useMemo(
     () =>
@@ -206,7 +212,11 @@ export default function MapPage() {
                   הצג פרטים
                 </button>
                 <button
-                  onClick={dismiss}
+                  onClick={() => {
+                    const { lat, lng } = selectedSite.coordinates
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank')
+                    dismiss()
+                  }}
                   className="flex items-center gap-1.5 bg-olive-700 text-white
                              text-xs font-semibold px-3 py-1.5 rounded-lg
                              hover:bg-olive-800 active:scale-95 transition-all duration-150"

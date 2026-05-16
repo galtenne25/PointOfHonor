@@ -40,7 +40,7 @@ export default function MemorialDetailPage() {
 
   function handleNavigate() {
     const { lat, lng } = memorial.coordinates;
-    window.open(`https://maps.google.com/?q=${lat},${lng}`, '_blank');
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
   }
 
   function handleShare() {

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Landmark, RouteIcon, MapPin, Award, Users } from 'lucide-react'
 import { memorialSites } from '../data/mockData'
 import SavedItemCard from '../components/profile/SavedItemCard'
+import StatsSheet from '../components/common/StatsSheet'
+import { routes } from '../data/routesData'
 
 const TABS = [
   { id: 'saved',         label: 'מקומות שמורים' },
@@ -10,15 +12,44 @@ const TABS = [
 ]
 
 const STATS = [
-  { icon: Landmark,   value: memorialSites.length, label: 'מקומות שמורים' },
-  { icon: RouteIcon,  value: 3,                    label: 'מסלולים שמורים' },
-  { icon: MapPin,     value: 2,                    label: 'נקודות שהוספתי'  },
-  { icon: Award,      value: 1,                    label: 'תגים שהושגו'     },
+  { icon: Landmark,  value: memorialSites.length, label: 'מקומות שמורים',  sheetKey: 'saved'  },
+  { icon: RouteIcon, value: 3,                    label: 'מסלולים שמורים', sheetKey: 'routes' },
+  { icon: MapPin,    value: 2,                    label: 'נקודות שהוספתי', sheetKey: 'points' },
+  { icon: Award,     value: 1,                    label: 'תגים שהושגו',    sheetKey: 'badges' },
 ]
 
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('saved')
+  const [activeTab,  setActiveTab ] = useState('saved')
+  const [statsSheet, setStatsSheet] = useState(null)
+
+  const sheetConfig = {
+    saved: {
+      title: 'מקומות שמורים',
+      emptyText: 'עדיין לא שמרת מקומות',
+      items: memorialSites.map(s => ({
+        id: s.id,
+        name: s.name,
+        subtitle: `${s.location} · ${s.city?.split(',')[0]}`,
+        imageUrl: s.imageUrl,
+      })),
+    },
+    routes: {
+      title: 'מסלולים שמורים',
+      emptyText: 'עדיין לא שמרת מסלולים',
+      items: [],
+    },
+    points: {
+      title: 'נקודות שהוספתי',
+      emptyText: 'עדיין לא הוספת נקודות',
+      items: [],
+    },
+    badges: {
+      title: 'תגים שהושגו',
+      emptyText: 'עדיין לא הושגו תגים',
+      items: [{ id: 'b1', name: 'חבר מייסד', subtitle: 'הצטרפת בינואר 2024' }],
+    },
+  }
 
   return (
     <div dir="rtl" className="flex flex-col min-h-full pb-4">
@@ -27,7 +58,7 @@ export default function ProfilePage() {
       <div className="bg-white px-5 pt-5 pb-4 flex items-center gap-4 border-b border-slate-100">
         {/* Name + subtitle — first in DOM → right in RTL */}
         <div className="flex-1 flex flex-col items-end">
-          <p className="text-lg font-bold text-slate-800">גל טנה</p>
+          <p className="text-lg font-bold text-slate-800">גל טנא</p>
           <p className="text-sm text-slate-400 mt-0.5">חבר מאז ינואר 2024</p>
           <span className="mt-1.5 inline-block bg-olive-100 text-olive-700
                            text-xs font-semibold px-2.5 py-0.5 rounded-full">
@@ -59,10 +90,15 @@ export default function ProfilePage() {
 
       {/* ── Stats grid ── */}
       <div className="grid grid-cols-2 gap-3 px-5 pt-4">
-        {STATS.map(({ icon: Icon, value, label }) => (
-          <div key={label}
-               className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-slate-100
-                          flex flex-col items-end gap-1">
+        {STATS.map(({ icon: Icon, value, label, sheetKey }) => (
+          <button
+            key={label}
+            onClick={() => setStatsSheet(sheetKey)}
+            className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-slate-100
+                       flex flex-col items-end gap-1 text-right w-full
+                       hover:border-olive-200 hover:bg-olive-50 active:scale-95
+                       transition-all duration-150"
+          >
             <div className="flex items-center gap-2">
               <p className="text-2xl font-bold text-slate-800">{value}</p>
               <div className="w-8 h-8 rounded-full bg-olive-50 flex items-center justify-center">
@@ -70,7 +106,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <p className="text-xs text-slate-400 text-right leading-snug">{label}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -116,6 +152,14 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      <StatsSheet
+        isOpen={!!statsSheet}
+        onClose={() => setStatsSheet(null)}
+        title={statsSheet ? sheetConfig[statsSheet].title : ''}
+        items={statsSheet ? sheetConfig[statsSheet].items : []}
+        emptyText={statsSheet ? sheetConfig[statsSheet].emptyText : ''}
+      />
 
     </div>
   )

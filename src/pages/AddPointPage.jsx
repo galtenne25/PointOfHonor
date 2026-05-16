@@ -1,15 +1,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Upload, MapPin, CheckCircle, Loader2 } from 'lucide-react'
+import { ChevronRight, Upload, MapPin, CheckCircle, Loader2, X } from 'lucide-react'
+import { MapContainer, TileLayer, Marker, useMapEvent } from 'react-leaflet'
+import L from 'leaflet'
 
 export default function AddPointPage() {
   const navigate = useNavigate()
   const toastTimerRef = useRef(null)
 
-  const [form,         setForm        ] = useState({ name: '', description: '' })
-  const [images,       setImages      ] = useState([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showToast,    setShowToast   ] = useState(false)
+  const [form,           setForm          ] = useState({ name: '', description: '' })
+  const [images,         setImages        ] = useState([])
+  const [isSubmitting,   setIsSubmitting  ] = useState(false)
+  const [showToast,      setShowToast     ] = useState(false)
+  const [pickedLocation, setPickedLocation] = useState(null)
+  const [mapModalOpen,   setMapModalOpen  ] = useState(false)
 
   useEffect(() => {
     return () => { images.forEach(img => URL.revokeObjectURL(img.url)) }
@@ -38,6 +42,7 @@ export default function AddPointPage() {
     setIsSubmitting(false)
     setForm({ name: '', description: '' })
     setImages([])
+    setPickedLocation(null)
     setShowToast(true)
 
     toastTimerRef.current = setTimeout(() => {
@@ -87,20 +92,23 @@ export default function AddPointPage() {
 
         {/* 2 · Map location placeholder */}
         <Field label="מיקום על המפה">
-          <div className="relative h-36 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer">
+          <div
+            onClick={() => setMapModalOpen(true)}
+            className="relative h-36 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
+          >
             <img
               src="https://picsum.photos/seed/mapplaceholder/800/300"
               alt="מיקום"
               className="w-full h-full object-cover opacity-50"
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <div className="w-11 h-11 rounded-full bg-olive-700/90 shadow-md
-                              flex items-center justify-center">
+              <div className="w-11 h-11 rounded-full bg-olive-700/90 shadow-md flex items-center justify-center">
                 <MapPin size={22} className="text-white" strokeWidth={2} />
               </div>
-              <span className="text-sm font-semibold text-slate-800
-                               bg-white/85 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm">
-                לחץ לבחירת מיקום
+              <span className="text-sm font-semibold text-slate-800 bg-white/85 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm">
+                {pickedLocation
+                  ? `📍 ${pickedLocation.lat}, ${pickedLocation.lng}`
+                  : 'לחץ לבחירת מיקום'}
               </span>
             </div>
           </div>
@@ -190,7 +198,100 @@ export default function AddPointPage() {
         <p className="text-sm font-semibold">הבקשה נשלחה לאישור מנהל</p>
       </div>
 
+      <MapPickerModal
+        isOpen={mapModalOpen}
+        onClose={() => setMapModalOpen(false)}
+        onConfirm={loc => setPickedLocation(loc)}
+        pickedLocation={pickedLocation}
+      />
+
     </div>
+  )
+}
+
+// ── Inner map click handler ───────────────────────────────────────────────────
+function LocationPickerMap({ onPick }) {
+  useMapEvent('click', e => {
+    onPick({ lat: e.latlng.lat.toFixed(5), lng: e.latlng.lng.toFixed(5) })
+  })
+  return null
+}
+
+// ── Full-screen map picker bottom-sheet ───────────────────────────────────────
+function MapPickerModal({ isOpen, onClose, onConfirm }) {
+  const [tempLocation, setTempLocation] = useState(null)
+
+  useEffect(() => {
+    if (isOpen) setTempLocation(null)
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  const ISRAEL_CENTER = [31.5, 35.0]
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[2000] bg-black/60" onClick={onClose} />
+      <div
+        dir="rtl"
+        className="fixed bottom-0 left-0 right-0 z-[2001] bg-white rounded-t-2xl flex flex-col"
+        style={{ height: '85vh', animation: 'slideUp 0.3s ease-out' }}
+      >
+        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-0 flex-shrink-0" />
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={20} strokeWidth={2} />
+          </button>
+          <h2 className="text-base font-bold text-slate-800">בחר מיקום על המפה</h2>
+          <div className="w-6" />
+        </div>
+        <p className="text-xs text-slate-400 text-center py-2 flex-shrink-0">
+          {tempLocation
+            ? `נבחר: ${tempLocation.lat}, ${tempLocation.lng}`
+            : 'לחץ על המפה לבחירת מיקום'}
+        </p>
+        <div className="flex-1 relative">
+          <MapContainer
+            center={ISRAEL_CENTER}
+            zoom={7}
+            style={{ height: '100%', width: '100%' }}
+            zoomControl={true}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='© OpenStreetMap'
+            />
+            <LocationPickerMap onPick={setTempLocation} />
+            {tempLocation && (
+              <Marker
+                position={[parseFloat(tempLocation.lat), parseFloat(tempLocation.lng)]}
+                icon={L.divIcon({
+                  className: '',
+                  html: `<div style="width:24px;height:30px;position:relative;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" style="width:24px;height:30px;">
+                      <path d="M16 0C7.163 0 0 7.163 0 16c0 10.667 16 24 16 24S32 26.667 32 16C32 7.163 24.837 0 16 0z" fill="#4c5a28"/>
+                    </svg>
+                  </div>`,
+                  iconSize: [24, 30],
+                  iconAnchor: [12, 30],
+                })}
+              />
+            )}
+          </MapContainer>
+        </div>
+        <div className="px-5 py-4 border-t border-slate-200 flex-shrink-0">
+          <button
+            onClick={() => { if (tempLocation) { onConfirm(tempLocation); onClose() } }}
+            disabled={!tempLocation}
+            className="w-full py-3.5 bg-olive-700 text-white text-sm font-bold rounded-full
+                       disabled:bg-slate-300 disabled:cursor-not-allowed
+                       hover:bg-olive-800 active:scale-95 transition-all duration-150"
+          >
+            אשר מיקום
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
 

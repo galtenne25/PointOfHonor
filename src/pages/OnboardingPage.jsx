@@ -31,6 +31,7 @@ export default function OnboardingPage() {
 
   function finish() {
     localStorage.setItem('ntz_onboarded', '1')
+    window.dispatchEvent(new Event('ntz:onboarded'))
     navigate('/map', { replace: true })
   }
 
