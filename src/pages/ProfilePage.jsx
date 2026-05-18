@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Landmark, RouteIcon, MapPin, Award, Users } from 'lucide-react'
-import { useApp } from '../contexts/AppContext'
-import SavedItemCard from '../components/profile/SavedItemCard'
+import { RouteIcon, CheckCircle2, MapPin, Award, Users, Lock, Plus, ChevronLeft } from 'lucide-react'
+import { useApp, BADGES } from '../contexts/AppContext'
+import RouteListItem from '../components/routes/RouteListItem'
 import StatsSheet from '../components/common/StatsSheet'
 
 const TABS = [
-  { id: 'saved',         label: 'מקומות שמורים' },
-  { id: 'contributions', label: 'התרומות שלי'   },
+  { id: 'saved',         label: 'מסלולים שמורים' },
+  { id: 'contributions', label: 'התרומות שלי'     },
 ]
 
 function StatsSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 px-5 pt-4">
-      {[1,2,3,4].map(i => (
+      {[1, 2, 3, 4].map(i => (
         <div key={i} className="bg-white rounded-2xl px-4 py-3.5 border border-slate-100 animate-pulse">
           <div className="flex items-center gap-2 justify-end">
             <div className="h-7 w-10 bg-slate-200 rounded-full" />
@@ -26,44 +26,104 @@ function StatsSkeleton() {
   )
 }
 
+function EmptyState({ icon, title, hint }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-14 text-slate-400">
+      <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+        {icon}
+      </div>
+      <p className="text-sm font-semibold text-slate-500">{title}</p>
+      {hint && (
+        <p className="text-xs text-slate-400 text-center leading-relaxed px-8">{hint}</p>
+      )}
+    </div>
+  )
+}
+
+function BadgeCard({ badge, earned }) {
+  return (
+    <div
+      className={`relative flex flex-col items-center gap-1.5 rounded-2xl border p-4 text-center
+        transition-all duration-200
+        ${earned
+          ? 'bg-olive-50 border-olive-200'
+          : 'bg-slate-50 border-slate-200 opacity-60 grayscale'}`}
+    >
+      {!earned && (
+        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-slate-200
+                        flex items-center justify-center">
+          <Lock size={12} className="text-slate-500" strokeWidth={2.2} />
+        </div>
+      )}
+      <span className="text-3xl leading-none">{badge.icon}</span>
+      <p className={`text-sm font-bold ${earned ? 'text-olive-800' : 'text-slate-500'}`}>
+        {badge.label}
+      </p>
+      <p className="text-[11px] text-slate-400 leading-snug">{badge.desc}</p>
+      {earned && (
+        <span className="mt-1 text-[10px] font-bold text-olive-700 bg-olive-100 px-2 py-0.5 rounded-full">
+          הושג ✓
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const { sites, sitesLoading } = useApp()
+  const {
+    routes, routesLoading,
+    savedRoutes, completedRouteIds, userProgress,
+  } = useApp()
+
   const [activeTab,  setActiveTab ] = useState('saved')
   const [statsSheet, setStatsSheet] = useState(null)
 
+  const completedRoutes = routes.filter(r => completedRouteIds.includes(r.id))
+  const earnedBadges    = BADGES.filter(b => b.test(userProgress))
+
   const STATS = [
-    { icon: Landmark,  value: sites.length, label: 'מקומות שמורים',  sheetKey: 'saved'  },
-    { icon: RouteIcon, value: 3,            label: 'מסלולים שמורים', sheetKey: 'routes' },
-    { icon: MapPin,    value: 2,            label: 'נקודות שהוספתי', sheetKey: 'points' },
-    { icon: Award,     value: 1,            label: 'תגים שהושגו',    sheetKey: 'badges' },
+    {
+      icon: RouteIcon, value: savedRoutes.length, label: 'מסלולים שמורים',
+      onClick: () => setStatsSheet('saved'),
+    },
+    {
+      icon: CheckCircle2, value: completedRoutes.length, label: 'מסלולים שהושלמו',
+      onClick: () => setStatsSheet('completed'),
+    },
+    {
+      icon: MapPin, value: userProgress.addedMemorials, label: 'נקודות שהוספתי',
+      onClick: () => navigate('/add-point'),
+    },
+    {
+      icon: Award, value: earnedBadges.length, label: 'תגים שהושגו',
+      onClick: () => setStatsSheet('badges'),
+    },
   ]
 
   const sheetConfig = {
     saved: {
-      title: 'מקומות שמורים',
-      emptyText: 'עדיין לא שמרת מקומות',
-      items: sites.map(s => ({
-        id:       s.id,
-        name:     s.name,
-        subtitle: `${s.location} · ${s.city?.split(',')[0]}`,
-        imageUrl: s.imageUrl,
-      })),
-    },
-    routes: {
       title: 'מסלולים שמורים',
       emptyText: 'עדיין לא שמרת מסלולים',
-      items: [],
+      items: savedRoutes.map(r => ({
+        id: r.id, name: r.title,
+        subtitle: `${r.distance || ''}${r.distance && r.duration ? ' · ' : ''}${r.duration || ''}`,
+        imageUrl: r.imageUrl,
+      })),
     },
-    points: {
-      title: 'נקודות שהוספתי',
-      emptyText: 'עדיין לא הוספת נקודות',
-      items: [],
+    completed: {
+      title: 'מסלולים שהושלמו',
+      emptyText: 'עדיין לא סימנת מסלולים כהושלמו',
+      items: completedRoutes.map(r => ({
+        id: r.id, name: r.title,
+        subtitle: `${r.distance || ''}${r.distance && r.duration ? ' · ' : ''}${r.duration || ''}`,
+        imageUrl: r.imageUrl,
+      })),
     },
     badges: {
-      title: 'תגים שהושגו',
-      emptyText: 'עדיין לא הושגו תגים',
-      items: [{ id: 'b1', name: 'חבר מייסד', subtitle: 'הצטרפת בינואר 2024' }],
+      title: 'התגים שלי',
+      emptyText: 'עדיין לא הושגו תגים — צא למסלול או הדלק נר!',
+      items: earnedBadges.map(b => ({ id: b.id, name: `${b.icon} ${b.label}`, subtitle: b.desc })),
     },
   }
 
@@ -102,21 +162,21 @@ export default function ProfilePage() {
       </button>
 
       {/* ── Stats grid ── */}
-      {sitesLoading ? (
+      {routesLoading ? (
         <StatsSkeleton />
       ) : (
         <div className="grid grid-cols-2 gap-3 px-5 pt-4">
-          {STATS.map(({ icon: Icon, value, label, sheetKey }) => (
+          {STATS.map(({ icon: Icon, value, label, onClick }) => (
             <button
               key={label}
-              onClick={() => setStatsSheet(sheetKey)}
+              onClick={onClick}
               className="bg-white rounded-2xl px-4 py-3.5 shadow-sm border border-slate-100
                          flex flex-col items-end gap-1 text-right w-full
                          hover:border-olive-200 hover:bg-olive-50 active:scale-95
                          transition-all duration-150"
             >
               <div className="flex items-center gap-2">
-                <p className="text-2xl font-bold text-slate-800">{value}</p>
+                <p className="text-2xl font-bold text-slate-800">{value || ''}</p>
                 <div className="w-8 h-8 rounded-full bg-olive-50 flex items-center justify-center">
                   <Icon size={16} className="text-olive-700" strokeWidth={1.8} />
                 </div>
@@ -127,8 +187,25 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* ── Badges (Task 3) ── */}
+      <section className="px-5 pt-6">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-slate-400">{earnedBadges.length}/{BADGES.length}</span>
+          <h2 className="text-base font-bold text-slate-800">התגים שלי</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {BADGES.map(badge => (
+            <BadgeCard
+              key={badge.id}
+              badge={badge}
+              earned={earnedBadges.some(b => b.id === badge.id)}
+            />
+          ))}
+        </div>
+      </section>
+
       {/* ── Segmented tab control ── */}
-      <div className="mx-5 mt-5 flex bg-slate-100 rounded-xl p-1 gap-1">
+      <div className="mx-5 mt-6 flex bg-slate-100 rounded-xl p-1 gap-1">
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -147,36 +224,60 @@ export default function ProfilePage() {
 
       {/* ── Tab content ── */}
       <div className="flex flex-col gap-3 px-5 mt-4">
+
         {activeTab === 'saved' && (
-          sitesLoading
-            ? [1,2,3].map(i => (
-                <div key={i} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 animate-pulse">
-                  <div className="w-16 h-16 bg-slate-200 rounded-xl flex-shrink-0" />
-                  <div className="flex-1 flex flex-col gap-2 justify-center">
-                    <div className="w-3/4 h-4 bg-slate-200 rounded-full" />
-                    <div className="w-1/2 h-3 bg-slate-200 rounded-full" />
-                  </div>
+          routesLoading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="flex gap-3 bg-white p-3 rounded-2xl border border-slate-100 animate-pulse">
+                <div className="w-16 h-16 bg-slate-200 rounded-xl flex-shrink-0" />
+                <div className="flex-1 flex flex-col gap-2 justify-center">
+                  <div className="w-3/4 h-4 bg-slate-200 rounded-full" />
+                  <div className="w-1/2 h-3 bg-slate-200 rounded-full" />
                 </div>
-              ))
-            : sites.map(site => (
-                <SavedItemCard
-                  key={site.id}
-                  site={site}
-                  onClick={() => navigate(`/memorials/${site.id}`)}
-                />
-              ))
+              </div>
+            ))
+          ) : savedRoutes.length === 0 ? (
+            <EmptyState
+              icon={<RouteIcon size={24} strokeWidth={1.5} className="text-slate-300" />}
+              title="עדיין לא שמרת מסלולים"
+              hint="סמן מסלולים מעניינים בסימנייה כדי שתמצא אותם כאן בקלות"
+            />
+          ) : (
+            savedRoutes.map(route => (
+              <RouteListItem
+                key={route.id}
+                route={route}
+                onClick={() => navigate(`/routes/${route.id}`)}
+              />
+            ))
+          )
         )}
 
         {activeTab === 'contributions' && (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
-            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
-              <MapPin size={24} strokeWidth={1.5} className="text-slate-300" />
+          <button
+            onClick={() => navigate('/add-point')}
+            className="group flex flex-col items-center justify-center gap-3 py-12 px-6
+                       bg-white border-2 border-dashed border-olive-200 rounded-2xl
+                       hover:border-olive-400 hover:bg-olive-50 active:scale-[0.98]
+                       transition-all duration-150"
+          >
+            <div className="w-14 h-14 rounded-full bg-olive-100 flex items-center justify-center
+                            group-hover:bg-olive-200 transition-colors">
+              <Plus size={26} strokeWidth={2} className="text-olive-700" />
             </div>
-            <p className="text-sm font-medium text-slate-500">עדיין לא הוספת נקודות</p>
-            <p className="text-xs text-slate-400 text-center leading-relaxed px-8">
-              הוסף אנדרטאות ואתרי הנצחה כדי שיופיעו כאן
+            <p className="text-sm font-bold text-olive-800">
+              {userProgress.addedMemorials > 0
+                ? `הוספת ${userProgress.addedMemorials} נקודות — הוסף עוד`
+                : 'הוסף אנדרטה או אתר הנצחה'}
             </p>
-          </div>
+            <p className="text-xs text-slate-500 text-center leading-relaxed">
+              שתף את הקהילה במקום הנצחה. הנקודה תופיע במפה לאחר אישור המערכת.
+            </p>
+            <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-olive-700">
+              למעבר להוספת נקודה
+              <ChevronLeft size={14} strokeWidth={2.5} />
+            </span>
+          </button>
         )}
       </div>
 

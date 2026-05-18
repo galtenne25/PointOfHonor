@@ -9,6 +9,7 @@ import RoutesPage from './pages/RoutesPage'
 import RouteDetailPage from './pages/RouteDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import AddPointPage from './pages/AddPointPage'
+import AddRoutePage from './pages/AddRoutePage'
 import NotFoundPage from './pages/NotFoundPage'
 import OnboardingPage from './pages/OnboardingPage'
 import SoldierProfilePage from './pages/SoldierProfilePage'
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/routes/:id" element={<RouteDetailPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/add-point" element={<AddPointPage />} />
+        <Route path="/add-route" element={<AddRoutePage />} />
         <Route path="/soldiers/:id" element={<SoldierProfilePage />} />
         <Route path="/community" element={<CommunityFeedPage />} />
         <Route path="*" element={<NotFoundPage />} />

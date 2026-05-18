@@ -1,20 +1,43 @@
-import { Clock, MapPin, Dumbbell } from 'lucide-react'
+import { Clock, MapPin, Dumbbell, Bookmark } from 'lucide-react'
+import { useApp } from '../../contexts/AppContext'
 
 const DIFFICULTY = {
   easy:   { label: 'קל',     color: 'text-emerald-600' },
   medium: { label: 'בינוני', color: 'text-amber-600'   },
   hard:   { label: 'קשה',    color: 'text-red-500'     },
+  // The seeded data uses Hebrew difficulty values directly.
+  'קל':     { label: 'קל',     color: 'text-emerald-600' },
+  'בינוני': { label: 'בינוני', color: 'text-amber-600'   },
+  'קשה':    { label: 'קשה',    color: 'text-red-500'     },
 }
 
 export default function FeaturedRouteCard({ route, onClick }) {
-  const diff = DIFFICULTY[route.difficulty] ?? { label: route.difficulty, color: 'text-slate-500' }
+  const { savedRouteIds, toggleSavedRoute } = useApp()
+  const saved = savedRouteIds.includes(route.id)
+  const diff  = DIFFICULTY[route.difficulty] ?? { label: route.difficulty, color: 'text-slate-500' }
 
   return (
     <div
       onClick={onClick}
-      className="flex-shrink-0 w-[268px] bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100
+      className="relative flex-shrink-0 w-[268px] bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100
                  cursor-pointer active:scale-[0.98] transition-transform duration-150"
     >
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); toggleSavedRoute(route.id) }}
+        aria-label={saved ? 'הסר מהשמורים' : 'שמור מסלול'}
+        aria-pressed={saved}
+        className="absolute top-2.5 left-2.5 z-10 w-8 h-8 rounded-full
+                   bg-white/90 backdrop-blur-sm shadow-md flex items-center justify-center
+                   active:scale-90 transition-all"
+      >
+        <Bookmark
+          size={15}
+          strokeWidth={2}
+          className={saved ? 'text-olive-700' : 'text-slate-500'}
+          fill={saved ? '#4c5a28' : 'none'}
+        />
+      </button>
       <img
         src={route.imageUrl}
         alt={route.title}

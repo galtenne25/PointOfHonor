@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { getMemorials, addMemorial as dbAddMemorial } from '../services/memorials'
-import { getRoutes }                                   from '../services/routes'
+import { getRoutes, addRoute as dbAddRoute }           from '../services/routes'
 import {
   getCandleCounts,
   insertCandleActivity,
@@ -30,10 +30,48 @@ const MEM_CHIPS_INIT = [
   { id: 'hostility', label: 'נפגעי איבה', emoji: '🎗️', active: false },
 ]
 
-const ROUTE_CHIPS_INIT = [
-  { id: 'all',    label: 'הכל',         emoji: null,  active: true  },
-  { id: 'unit',   label: 'מורשת יחידה', emoji: '🎖️', active: false },
-  { id: 'nature', label: 'טבע והנצחה',  emoji: '🌿',  active: false },
+// ── Route filter facets (shared by the chip bar + the FilterSheet) ───────────
+export const ROUTE_FILTER_GROUPS = [
+  {
+    key: 'length', title: 'אורך המסלול',
+    options: [
+      { value: 'short', label: 'עד 3 ק"מ' },
+      { value: 'mid',   label: '3-8 ק"מ'  },
+      { value: 'long',  label: 'מעל 8 ק"מ' },
+    ],
+  },
+  {
+    key: 'region', title: 'אזור',
+    options: [
+      { value: 'north',  label: 'צפון' },
+      { value: 'center', label: 'מרכז' },
+      { value: 'south',  label: 'דרום' },
+    ],
+  },
+  {
+    key: 'type', title: 'סוג',
+    options: [
+      { value: 'lookout', label: 'מצפה'  },
+      { value: 'trail',   label: 'מסלול' },
+    ],
+  },
+  {
+    key: 'water', title: 'מים',
+    options: [
+      { value: 'with',    label: 'עם מים'  },
+      { value: 'without', label: 'ללא מים' },
+    ],
+  },
+]
+
+const ROUTE_FILTERS_INIT = { length: 'all', region: 'all', type: 'all', water: 'all' }
+
+// ── Achievement badges (logic lives with the data it evaluates) ──────────────
+export const BADGES = [
+  { id: 'beginner', label: 'סייר מתחיל',   icon: '🧭', desc: 'השלמת מסלול אחד',          test: p => p.completedRouteIds.length >= 1 },
+  { id: 'explorer', label: 'חורש הארץ',    icon: '🥾', desc: 'השלמת 5 מסלולים',          test: p => p.completedRouteIds.length >= 5 },
+  { id: 'keeper',   label: 'שומר הזיכרון', icon: '🕊️', desc: 'הוספת אתר הנצחה למערכת',   test: p => p.addedMemorials >= 1 },
+  { id: 'candle',   label: 'מדליק הנר',    icon: '🕯️', desc: 'הדלקת נר או הוספת סיפור',  test: p => p.litCandle },
 ]
 
 // ── Radio-chip hook ───────────────────────────────────────────────────────────
@@ -51,6 +89,20 @@ function useRadioChips(init) {
   }, [])
 
   return [chips, select]
+}
+
+// ── localStorage-backed state (the app has no auth → per-device persistence) ──
+function usePersistentState(key, initial) {
+  const [val, setVal] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key)
+      return raw != null ? { ...initial, ...JSON.parse(raw) } : initial
+    } catch { return initial }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* quota / private mode */ }
+  }, [key, val])
+  return [val, setVal]
 }
 
 // ── Filtering helpers ─────────────────────────────────────────────────────────
@@ -72,12 +124,19 @@ function applySiteFilters(sites, chips, query) {
   return result
 }
 
-function applyRouteFilters(list, chips, query) {
-  const active = chips.find(c => c.active && c.id !== 'all')
+function matchLength(km, sel) {
+  if (sel === 'short') return km > 0 && km <= 3
+  if (sel === 'mid')   return km > 3 && km <= 8
+  if (sel === 'long')  return km > 8
+  return true
+}
+
+function applyRouteFilters(list, filters, query) {
   let result = list
-  if (active && CATEGORY[active.id]) {
-    result = result.filter(r => r.category === CATEGORY[active.id])
-  }
+  if (filters.length !== 'all') result = result.filter(r => matchLength(r.distanceKm ?? 0, filters.length))
+  if (filters.region !== 'all') result = result.filter(r => r.region === filters.region)
+  if (filters.type   !== 'all') result = result.filter(r => r.routeType === filters.type)
+  if (filters.water  !== 'all') result = result.filter(r => (filters.water === 'with' ? r.hasWater : !r.hasWater))
   if (query.trim()) {
     const q = query.trim().toLowerCase()
     result = result.filter(r =>
@@ -156,15 +215,52 @@ export function AppProvider({ children }) {
   const [memQuery,    setMemQuery   ] = useState('')
   const [routesQuery, setRoutesQuery] = useState('')
 
-  const [mapChips,   selectMapChip  ] = useRadioChips(MAP_CHIPS_INIT)
-  const [memChips,   selectMemChip  ] = useRadioChips(MEM_CHIPS_INIT)
-  const [routeChips, selectRouteChip] = useRadioChips(ROUTE_CHIPS_INIT)
+  const [mapChips, selectMapChip] = useRadioChips(MAP_CHIPS_INIT)
+  const [memChips, selectMemChip] = useRadioChips(MEM_CHIPS_INIT)
+
+  // ── Route filters (multi-facet; replaces the old radio chips) ─────────────
+  const [routeFilters, setRouteFilters] = useState(ROUTE_FILTERS_INIT)
+
+  // Toggle behaviour: re-selecting the active value clears that facet.
+  const setRouteFilter = useCallback((key, value) => {
+    setRouteFilters(prev => ({ ...prev, [key]: prev[key] === value ? 'all' : value }))
+  }, [])
+  const resetRouteFilters = useCallback(() => setRouteFilters(ROUTE_FILTERS_INIT), [])
+
+  // ── Per-device user progress (no auth) — saves, completions, achievements ──
+  const [userProgress, setUserProgress] = usePersistentState('ntz_progress', {
+    savedRouteIds: [], completedRouteIds: [], addedMemorials: 0, litCandle: false,
+  })
+
+  const toggleSavedRoute = useCallback(id => {
+    setUserProgress(p => ({
+      ...p,
+      savedRouteIds: p.savedRouteIds.includes(id)
+        ? p.savedRouteIds.filter(x => x !== id)
+        : [...p.savedRouteIds, id],
+    }))
+  }, [setUserProgress])
+
+  const markRouteCompleted = useCallback(id => {
+    setUserProgress(p => p.completedRouteIds.includes(id)
+      ? p
+      : { ...p, completedRouteIds: [...p.completedRouteIds, id] })
+  }, [setUserProgress])
 
   // ── Write: add memorial ───────────────────────────────────────────────────
+  // New submissions are created with status 'pending' and must NOT appear on
+  // the map/lists until a moderator approves them — so we deliberately do not
+  // add the row to `sites`. We do record it for the "Memory Keeper" badge.
   const addMemorial = useCallback(async (formData) => {
     const newSite = await dbAddMemorial(formData)  // throws on any error; rollback handled in service
-    setSites(prev => [newSite, ...prev])
+    setUserProgress(p => ({ ...p, addedMemorials: p.addedMemorials + 1 }))
     return newSite
+  }, [setUserProgress])
+
+  // New routes are also created as 'pending' → intentionally NOT added to the
+  // `routes` list until a moderator approves them.
+  const addRoute = useCallback(async (formData) => {
+    return dbAddRoute(formData)  // throws on error → surfaced to the form
   }, [])
 
   // ── Write: light a candle (optimistic + DB + realtime dedup) ─────────────
@@ -178,14 +274,17 @@ export function AppProvider({ children }) {
 
       // 3. Register the id so the realtime subscription skips it
       pendingCandleIds.current.add(id)
+
+      // 4. Unlock the "Candle Lighter" badge
+      setUserProgress(p => (p.litCandle ? p : { ...p, litCandle: true }))
     } catch {
-      // 4. Roll back optimistic increment on failure
+      // 5. Roll back optimistic increment on failure
       setCandleCounts(prev => ({
         ...prev,
         [siteId]: Math.max(0, (prev[siteId] ?? 1) - 1),
       }))
     }
-  }, [])
+  }, [setUserProgress])
 
   // ── Derived: filtered lists ───────────────────────────────────────────────
   const filteredSites = useMemo(
@@ -199,8 +298,14 @@ export function AppProvider({ children }) {
   )
 
   const filteredRoutes = useMemo(
-    () => applyRouteFilters(routes, routeChips, routesQuery),
-    [routes, routeChips, routesQuery]
+    () => applyRouteFilters(routes, routeFilters, routesQuery),
+    [routes, routeFilters, routesQuery]
+  )
+
+  // Saved routes resolved against the loaded routes list
+  const savedRoutes = useMemo(
+    () => routes.filter(r => userProgress.savedRouteIds.includes(r.id)),
+    [routes, userProgress.savedRouteIds]
   )
 
   return (
@@ -215,7 +320,8 @@ export function AppProvider({ children }) {
       // chips
       mapChips,       selectMapChip,
       memChips,       selectMemChip,
-      routeChips,     selectRouteChip,
+      // route filters
+      routeFilters,   setRouteFilter,   resetRouteFilters,
       // derived
       filteredSites,
       filteredMapSites,
@@ -223,8 +329,16 @@ export function AppProvider({ children }) {
       // candles
       candleCounts,
       lightCandle,
+      // saves / progress / badges
+      savedRoutes,
+      savedRouteIds:    userProgress.savedRouteIds,
+      toggleSavedRoute,
+      completedRouteIds: userProgress.completedRouteIds,
+      markRouteCompleted,
+      userProgress,
       // write
       addMemorial,
+      addRoute,
     }}>
       {children}
     </AppContext.Provider>

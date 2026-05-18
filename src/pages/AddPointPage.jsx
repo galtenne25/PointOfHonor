@@ -67,7 +67,7 @@ export default function AddPointPage() {
       toastTimerRef.current = setTimeout(() => {
         setShowToast(false)
         navigate('/map')
-      }, 2000)
+      }, 3200)
     } catch (err) {
       setSubmitError(err.message ?? 'שגיאה בשמירת הנקודה. נסה שנית.')
     } finally {
@@ -227,7 +227,9 @@ export default function AddPointPage() {
         `}
       >
         <CheckCircle size={20} strokeWidth={2.2} className="flex-shrink-0" />
-        <p className="text-sm font-semibold">הבקשה נשלחה לאישור מנהל</p>
+        <p className="text-sm font-semibold leading-snug text-right">
+          תודה! הנקודה נשלחה לבדיקה ותופיע במפה לאחר אישור המערכת.
+        </p>
       </div>
 
       <MapPickerModal

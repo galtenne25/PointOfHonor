@@ -16,9 +16,19 @@ function mapSite(row) {
     coordinates:        { lat: row.latitude, lng: row.longitude },
     category:           row.category             ?? '',
     gallery:            (row.site_galleries ?? []).map(g => g.image_url),
+    // Moderation status. Rows predating the `status` column (or a DB where the
+    // migration hasn't been applied) are treated as already-approved so the
+    // app never goes blank.
+    status:             row.status               ?? 'approved',
     distance:           '',
     distanceFull:       '',
   }
+}
+
+// A row is publicly visible only when explicitly approved — but if the column
+// doesn't exist yet (status undefined/null) we fail open and show it.
+function isApproved(row) {
+  return row.status == null || row.status === 'approved'
 }
 
 // ── Read: all memorials ───────────────────────────────────────────────────────
@@ -29,7 +39,10 @@ export async function getMemorials() {
     .order('id')
 
   if (error) throw error
-  return data.map(mapSite)
+  // Strictly show approved sites only (pending/rejected submissions stay hidden
+  // until a moderator approves them). Filtered client-side so the query never
+  // fails on a DB that doesn't have the `status` column yet.
+  return data.filter(isApproved).map(mapSite)
 }
 
 export async function getMemorialById(id) {
@@ -39,7 +52,7 @@ export async function getMemorialById(id) {
     .eq('id', id)
     .single()
 
-  if (error) return null
+  if (error || !isApproved(data)) return null
   return mapSite(data)
 }
 
@@ -105,20 +118,34 @@ export async function addMemorial({
       coverUrl  = result.url
     }
 
-    // ── Step 2: insert the memorial row ───────────────────────────────────────
-    const { data: row, error: insertError } = await supabase
+    // ── Step 2: insert the memorial row (status: pending → needs moderation) ──
+    const baseRow = {
+      name,
+      description_snippet: description.slice(0, 120),
+      full_description:    description,
+      cover_image_url:     coverUrl,
+      latitude:            parseFloat(location.lat),
+      longitude:           parseFloat(location.lng),
+      category,
+    }
+
+    const insertPending = () => supabase
       .from('memorial_sites')
-      .insert({
-        name,
-        description_snippet: description.slice(0, 120),
-        full_description:    description,
-        cover_image_url:     coverUrl,
-        latitude:            parseFloat(location.lat),
-        longitude:           parseFloat(location.lng),
-        category,
-      })
+      .insert({ ...baseRow, status: 'pending' })
       .select('*, site_galleries(image_url)')
       .single()
+
+    let { data: row, error: insertError } = await insertPending()
+
+    // If the DB doesn't have the `status` column yet, don't block the user —
+    // retry without it (the schema_full_app.sql migration adds the column).
+    if (insertError && /'?status'? column|column .*status/i.test(insertError.message ?? '')) {
+      ({ data: row, error: insertError } = await supabase
+        .from('memorial_sites')
+        .insert(baseRow)
+        .select('*, site_galleries(image_url)')
+        .single())
+    }
 
     if (insertError) throw insertError
     insertedId = row.id

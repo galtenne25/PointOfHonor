@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Navigation2, ChevronRight, Clock, MapPin, Dumbbell } from 'lucide-react';
+import { Navigation2, ChevronRight, Clock, MapPin, Dumbbell, CheckCircle2 } from 'lucide-react';
 import { useRoute } from '../hooks/useRoute';
+import { useApp } from '../contexts/AppContext';
 import RouteTimeline from '../components/routes/RouteTimeline';
 
 // Inlined — no longer imported from routesData
@@ -8,6 +9,9 @@ const DIFFICULTY = {
   easy:   { label: 'קל',     color: 'text-emerald-600' },
   medium: { label: 'בינוני', color: 'text-amber-600'   },
   hard:   { label: 'קשה',    color: 'text-red-500'     },
+  'קל':     { label: 'קל',     color: 'text-emerald-600' },
+  'בינוני': { label: 'בינוני', color: 'text-amber-600'   },
+  'קשה':    { label: 'קשה',    color: 'text-red-500'     },
 }
 
 function NotFound({ onBack }) {
@@ -58,6 +62,8 @@ export default function RouteDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const { route, loading } = useRoute(id);
+  const { completedRouteIds, markRouteCompleted } = useApp();
+  const isCompleted = completedRouteIds.includes(Number(id)) || completedRouteIds.includes(id);
 
   if (loading) return <RouteSkeleton />;
   if (!route)  return <NotFound onBack={() => navigate('/routes')} />;
@@ -125,6 +131,19 @@ export default function RouteDetailPage() {
         >
           <Navigation2 size={18} strokeWidth={2} />
           התחל מסלול
+        </button>
+
+        <button
+          onClick={() => !isCompleted && markRouteCompleted(Number(id))}
+          disabled={isCompleted}
+          className={`w-full py-3 rounded-2xl text-sm font-bold flex items-center justify-center gap-2
+                      transition-all duration-150
+                      ${isCompleted
+                        ? 'bg-emerald-50 text-emerald-700 cursor-default'
+                        : 'border border-olive-700 text-olive-700 hover:bg-olive-50 active:scale-95'}`}
+        >
+          <CheckCircle2 size={18} strokeWidth={2} />
+          {isCompleted ? 'המסלול הושלם' : 'סמן כמסלול שהושלם'}
         </button>
 
       </div>

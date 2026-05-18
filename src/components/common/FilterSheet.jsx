@@ -41,7 +41,98 @@ function ChipGroup({ chips, selected, onToggle }) {
   )
 }
 
-export default function FilterSheet({ isOpen, onClose, onApply }) {
+// ── Sheet shell (shared chrome) ───────────────────────────────────────────────
+function SheetShell({ onClose, onReset, title, children, footer }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-[2000] bg-black/50" onClick={onClose} />
+      <div
+        dir="rtl"
+        className="fixed bottom-0 left-0 right-0 z-[2001] bg-white rounded-t-2xl
+                   px-5 pt-4 pb-8 max-h-[85vh] overflow-y-auto"
+        style={{ animation: 'slideUp 0.3s ease-out' }}
+      >
+        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3" />
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={onReset}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            איפוס
+          </button>
+          <h2 className="text-base font-bold text-slate-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="סגור"
+          >
+            <X size={20} strokeWidth={2} />
+          </button>
+        </div>
+        <div className="flex flex-col gap-5">
+          {children}
+          {footer}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
+ * Controlled, config-driven variant used by the Routes page.
+ * `groups`  : [{ key, title, options:[{value,label}] }]
+ * `values`  : { [key]: selectedValue | 'all' }
+ * `onChange`: (key, value) => void   (single-select per group; re-pick clears)
+ */
+function ControlledFilterSheet({ isOpen, onClose, groups, values, onChange, onReset }) {
+  if (!isOpen) return null
+  const activeCount = Object.values(values).filter(v => v && v !== 'all').length
+  return (
+    <SheetShell title="סינון מסלולים" onClose={onClose} onReset={onReset}>
+      {groups.map(group => (
+        <div key={group.key}>
+          <h3 className="text-sm font-semibold text-slate-700 mb-2.5 text-right">
+            {group.title}
+          </h3>
+          <div className="flex flex-wrap gap-2 justify-end">
+            {group.options.map(opt => {
+              const active = values[group.key] === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => onChange(group.key, opt.value)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                    ${active
+                      ? 'bg-olive-700 text-white'
+                      : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      <button
+        onClick={onClose}
+        className="w-full py-3 bg-olive-700 text-white text-sm font-semibold rounded-full
+                   hover:bg-olive-800 active:scale-95 transition-all duration-150"
+      >
+        {activeCount > 0 ? `הצג תוצאות (${activeCount} מסננים)` : 'הצג תוצאות'}
+      </button>
+    </SheetShell>
+  )
+}
+
+export default function FilterSheet({ groups, ...props }) {
+  // Routes page passes `groups` → controlled, config-driven sheet.
+  // Map / Memorials pass no groups → legacy uncontrolled sheet (unchanged).
+  return groups
+    ? <ControlledFilterSheet groups={groups} {...props} />
+    : <LegacyFilterSheet {...props} />
+}
+
+function LegacyFilterSheet({ isOpen, onClose, onApply }) {
   const [wars,    setWars   ] = useState(new Set())
   const [types,   setTypes  ] = useState(new Set())
   const [regions, setRegions] = useState(new Set())

@@ -1,12 +1,30 @@
-import { Clock } from 'lucide-react'
+import { Clock, Bookmark } from 'lucide-react'
+import { useApp } from '../../contexts/AppContext'
 
 export default function RouteListItem({ route, onClick }) {
+  const { savedRouteIds, toggleSavedRoute } = useApp()
+  const saved = savedRouteIds.includes(route.id)
+
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex gap-3 items-start
+      className="relative bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex gap-3 items-start
                  cursor-pointer active:scale-[0.99] transition-transform duration-150"
     >
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); toggleSavedRoute(route.id) }}
+        aria-label={saved ? 'הסר מהשמורים' : 'שמור מסלול'}
+        aria-pressed={saved}
+        className={`absolute top-2 left-2 z-10 w-8 h-8 rounded-full flex items-center justify-center
+                    transition-all active:scale-90
+                    ${saved
+                      ? 'bg-olive-50 text-olive-700'
+                      : 'bg-slate-50 text-slate-400 hover:text-slate-600'}`}
+      >
+        <Bookmark size={15} strokeWidth={2} fill={saved ? '#4c5a28' : 'none'} />
+      </button>
+
       <img
         src={route.imageUrl}
         alt={route.title}
@@ -15,7 +33,7 @@ export default function RouteListItem({ route, onClick }) {
       />
 
       <div className="flex-1 min-w-0 flex flex-col items-end">
-        <p className="text-sm font-bold text-slate-800 text-right leading-snug">
+        <p className="text-sm font-bold text-slate-800 text-right leading-snug pe-9">
           {route.title}
         </p>
         <p className="text-xs text-slate-400 text-right mt-1 line-clamp-2 leading-relaxed">
