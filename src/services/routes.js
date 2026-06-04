@@ -1,4 +1,5 @@
 import { supabase } from '../utils/supabase'
+import { getCurrentUserId, requireUserId } from './session'
 
 export const ROUTE_FILTER_CHIPS = [
   { id: 'nearby', label: 'בקרבת מקום',  emoji: null,  active: true  },
@@ -143,6 +144,9 @@ export async function addRoute({
   const distance_km = Math.max(0, Number(lengthKm) || 0)
   const slug = encodeURIComponent((title || 'route').slice(0, 40))
 
+  // Attach the current user as owner so RLS lets the row through.
+  const userId = await getCurrentUserId()
+
   let payload = {
     title:             title.trim(),
     description_short: description.trim().slice(0, 200),
@@ -156,6 +160,7 @@ export async function addRoute({
     has_water:         !!hasWater,
     route_type:        routeType,
     status:            'pending',
+    user_id:           userId,
     cover_image_url:   `https://picsum.photos/seed/nzroute-${slug}/1200/800`,
     map_image_url:     `https://picsum.photos/seed/nzroutemap-${slug}/900/600`,
   }
@@ -180,6 +185,98 @@ export async function addRoute({
     throw error
   }
   throw new Error('שמירת המסלול נכשלה')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Owner CRUD — the logged-in user managing their OWN pending submissions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** All routes owned by `userId` (any status, newest first). */
+export async function getMyRoutes(userId) {
+  if (!userId) return []
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*, route_waypoints ( id, name, description, image_url, stop_order )')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data.map(mapRoute)
+}
+
+/** Update an OWN pending route. Scoped to the live session user id on top of
+ *  the owner-update RLS policy (`rt_owner_update_pending`) — defense in depth. */
+export async function updateRouteOwn(id, patch) {
+  const uid = await requireUserId()
+  const distance_km = patch.lengthKm != null
+    ? Math.max(0, Number(patch.lengthKm))
+    : undefined
+
+  const update = {
+    ...(patch.title         !== undefined && { title: patch.title }),
+    ...(patch.description   !== undefined && { description_short: patch.description.slice(0, 200) }),
+    ...(distance_km !== undefined && {
+      distance_km,
+      duration: estimateDurationHe(distance_km),
+    }),
+    ...(patch.region        !== undefined && { region: patch.region }),
+    ...(patch.hasWater      !== undefined && { has_water: !!patch.hasWater }),
+    ...(patch.routeType     !== undefined && {
+      route_type: patch.routeType,
+      category: patch.routeType === 'lookout' ? 'טבע והנצחה' : 'מורשת יחידה',
+    }),
+    ...(patch.difficulty    !== undefined && { difficulty: patch.difficulty }),
+    ...(patch.startLocation !== undefined && { start_location: patch.startLocation }),
+  }
+
+  const { data, error } = await supabase
+    .from('routes')
+    .update(update)
+    .eq('id', id)
+    .eq('user_id', uid)
+    .select('*, route_waypoints ( id, name, description, image_url, stop_order )')
+    .single()
+  if (error) throw error
+  return mapRoute(data)
+}
+
+/** Delete an OWN route. Scoped to the session user id on top of the
+ *  owner-or-admin delete RLS policy. */
+export async function deleteRouteOwn(id) {
+  const uid = await requireUserId()
+  const { error } = await supabase
+    .from('routes')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', uid)
+  if (error) throw error
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Admin moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Routes awaiting moderator approval (admin RLS required). */
+export async function getPendingRoutes() {
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*, route_waypoints ( id, name, description, image_url, stop_order )')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data.map(mapRoute)
+}
+
+export async function approveRoute(id) {
+  const { error } = await supabase
+    .from('routes')
+    .update({ status: 'approved' })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function rejectRoute(id) {
+  const { error } = await supabase.from('routes').delete().eq('id', id)
+  if (error) throw error
 }
 
 export function getRouteFilterChips() {

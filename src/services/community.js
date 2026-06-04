@@ -1,4 +1,5 @@
 import { supabase } from '../utils/supabase'
+import { getCurrentUserId } from './session'
 
 const ACTION_MAP = {
   candle: { action: 'הדליק/ה נר וירטואלי',  type: 'candle' },
@@ -72,15 +73,18 @@ export async function getCandleCounts() {
 }
 
 // ── Write: insert a candle activity; returns the new row's id ─────────────────
-// user_id is null until auth is implemented.
+// Stamped with the live session's user id so the feed can join the lighter's
+// profile (name/initials/colour) instead of showing an orphaned "אנונימי" row.
+// Anonymous candles are still allowed (user_id stays null when logged out).
 export async function insertCandleActivity(siteId, siteName) {
+  const userId = await getCurrentUserId()
   const { data, error } = await supabase
     .from('community_activities')
     .insert({
       action_type: 'candle',
       site_id:     siteId,
       target_name: siteName,
-      user_id:     null,
+      user_id:     userId,
     })
     .select('id')
     .single()

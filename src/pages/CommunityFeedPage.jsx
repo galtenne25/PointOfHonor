@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Bell, Flame, Check, MapPin, FileText } from 'lucide-react'
+import { Bell, Flame, Check, MapPin, FileText, Inbox } from 'lucide-react'
+import { EmptyState, ErrorState } from '../components/ui'
 import {
   getCommunityActivities,
   getActivityById,
@@ -143,11 +144,7 @@ export default function CommunityFeedPage() {
         {loading ? (
           <FeedSkeleton />
         ) : error ? (
-          <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
-            <span className="text-4xl">⚠️</span>
-            <p className="text-sm font-medium text-slate-500">שגיאה בטעינת הפעילות</p>
-            <p className="text-xs text-slate-400 text-center">{error}</p>
-          </div>
+          <ErrorState title="שגיאה בטעינת הפעילות" message={error} />
         ) : (
           <>
             {visible.map((item, idx) => (
@@ -176,9 +173,11 @@ export default function CommunityFeedPage() {
             ))}
 
             {visible.length === 0 && (
-              <div className="flex flex-col items-center py-16 text-slate-400">
-                <p className="text-sm">אין פעילות בקטגוריה זו כרגע</p>
-              </div>
+              <EmptyState
+                icon={Inbox}
+                title="אין פעילות להצגה"
+                message="נסה לבחור קטגוריה אחרת או חזור מאוחר יותר"
+              />
             )}
 
             <button

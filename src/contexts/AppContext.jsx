@@ -6,6 +6,13 @@ import {
   insertCandleActivity,
   subscribeToActivityInserts,
 } from '../services/community'
+import {
+  getSavedRouteIds, addSavedRoute, removeSavedRoute,
+  getCompletedRouteIds, markRouteCompletedDB,
+  getContributionStats,
+} from '../services/saved'
+import { useAuth } from './AuthContext'
+import { useToast } from './ToastContext'
 
 // ── Chip id → DB category string ─────────────────────────────────────────────
 const CATEGORY = {
@@ -91,18 +98,8 @@ function useRadioChips(init) {
   return [chips, select]
 }
 
-// ── localStorage-backed state (the app has no auth → per-device persistence) ──
-function usePersistentState(key, initial) {
-  const [val, setVal] = useState(() => {
-    try {
-      const raw = localStorage.getItem(key)
-      return raw != null ? { ...initial, ...JSON.parse(raw) } : initial
-    } catch { return initial }
-  })
-  useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* quota / private mode */ }
-  }, [key, val])
-  return [val, setVal]
+const EMPTY_PROGRESS = {
+  savedRouteIds: [], completedRouteIds: [], addedMemorials: 0, addedRoutes: 0, litCandle: false,
 }
 
 // ── Filtering helpers ─────────────────────────────────────────────────────────
@@ -152,6 +149,10 @@ function applyRouteFilters(list, filters, query) {
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
+  // Auth gate must resolve BEFORE we hit Supabase — anon reads are no longer
+  // supported by our RLS, so we wait for `user.id` instead of firing on mount.
+  const { user, loading: authLoading } = useAuth()
+
   // ── Remote data ──────────────────────────────────────────────────────────
   const [sites,         setSites        ] = useState([])
   const [routes,        setRoutes       ] = useState([])
@@ -161,27 +162,34 @@ export function AppProvider({ children }) {
   const [routesError,   setRoutesError  ] = useState(null)
 
   useEffect(() => {
+    if (authLoading) return                       // still resolving the session
+    if (!user)        { setSites([]);  setSitesLoading(false);  return }
+    setSitesLoading(true); setSitesError(null)
     getMemorials()
       .then(setSites)
       .catch(err => setSitesError(err.message ?? 'שגיאה בטעינת אתרי הנצחה'))
       .finally(() => setSitesLoading(false))
-  }, [])
+  }, [authLoading, user?.id])
 
   useEffect(() => {
+    if (authLoading) return
+    if (!user)        { setRoutes([]); setRoutesLoading(false); return }
+    setRoutesLoading(true); setRoutesError(null)
     getRoutes()
       .then(setRoutes)
       .catch(err => setRoutesError(err.message ?? 'שגיאה בטעינת מסלולים'))
       .finally(() => setRoutesLoading(false))
-  }, [])
+  }, [authLoading, user?.id])
 
   // ── Candle counts (DB-backed, server-side aggregation) ───────────────────
   const [candleCounts, setCandleCounts] = useState({})
 
   useEffect(() => {
+    if (authLoading || !user) return
     getCandleCounts()
       .then(setCandleCounts)
       .catch(() => {})
-  }, [])
+  }, [authLoading, user?.id])
 
   // Tracks IDs of candle activities inserted by this client so the realtime
   // echo for our own inserts doesn't double-count the optimistic increment.
@@ -227,25 +235,73 @@ export function AppProvider({ children }) {
   }, [])
   const resetRouteFilters = useCallback(() => setRouteFilters(ROUTE_FILTERS_INIT), [])
 
-  // ── Per-device user progress (no auth) — saves, completions, achievements ──
-  const [userProgress, setUserProgress] = usePersistentState('ntz_progress', {
-    savedRouteIds: [], completedRouteIds: [], addedMemorials: 0, litCandle: false,
-  })
+  // ── Per-user progress (auth-backed) — saves, completions, contributions ──
+  // (`user` is already destructured at the top of the provider; we just need
+  // the toast helper here.)
+  const toast     = useToast()
+  const [progress,        setProgress       ] = useState(EMPTY_PROGRESS)
+  const [progressLoading, setProgressLoading] = useState(false)
 
-  const toggleSavedRoute = useCallback(id => {
-    setUserProgress(p => ({
+  // Reload whenever the user changes (login / logout / switch)
+  useEffect(() => {
+    if (!user) { setProgress(EMPTY_PROGRESS); return }
+    let cancelled = false
+    setProgressLoading(true)
+    Promise.all([
+      getSavedRouteIds(user.id),
+      getCompletedRouteIds(user.id),
+      getContributionStats(user.id),
+    ])
+      .then(([savedIds, completedIds, stats]) => {
+        if (cancelled) return
+        setProgress({
+          savedRouteIds:      savedIds,
+          completedRouteIds:  completedIds,
+          addedMemorials:     stats.addedMemorials,
+          addedRoutes:        stats.addedRoutes,
+          litCandle:          stats.litCandle,
+        })
+      })
+      .catch(() => { /* RLS / network — leave empty */ })
+      .finally(() => { if (!cancelled) setProgressLoading(false) })
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  const toggleSavedRoute = useCallback(async (id) => {
+    if (!user) { toast.info('יש להתחבר כדי לשמור מסלולים'); return }
+    const isSaved = progress.savedRouteIds.includes(id)
+    setProgress(p => ({
       ...p,
-      savedRouteIds: p.savedRouteIds.includes(id)
+      savedRouteIds: isSaved
         ? p.savedRouteIds.filter(x => x !== id)
         : [...p.savedRouteIds, id],
     }))
-  }, [setUserProgress])
+    try {
+      if (isSaved) await removeSavedRoute(user.id, id)
+      else         await addSavedRoute(user.id, id)
+    } catch {
+      // rollback on failure
+      setProgress(p => ({
+        ...p,
+        savedRouteIds: isSaved
+          ? [...p.savedRouteIds, id]
+          : p.savedRouteIds.filter(x => x !== id),
+      }))
+      toast.error('שמירת המסלול נכשלה')
+    }
+  }, [user, progress.savedRouteIds, toast])
 
-  const markRouteCompleted = useCallback(id => {
-    setUserProgress(p => p.completedRouteIds.includes(id)
-      ? p
-      : { ...p, completedRouteIds: [...p.completedRouteIds, id] })
-  }, [setUserProgress])
+  const markRouteCompleted = useCallback(async (id) => {
+    if (!user) { toast.info('יש להתחבר כדי לסמן מסלולים'); return }
+    if (progress.completedRouteIds.includes(id)) return
+    setProgress(p => ({ ...p, completedRouteIds: [...p.completedRouteIds, id] }))
+    try {
+      await markRouteCompletedDB(user.id, id)
+    } catch {
+      setProgress(p => ({ ...p, completedRouteIds: p.completedRouteIds.filter(x => x !== id) }))
+      toast.error('סימון השלמת המסלול נכשל')
+    }
+  }, [user, progress.completedRouteIds, toast])
 
   // ── Write: add memorial ───────────────────────────────────────────────────
   // New submissions are created with status 'pending' and must NOT appear on
@@ -253,9 +309,9 @@ export function AppProvider({ children }) {
   // add the row to `sites`. We do record it for the "Memory Keeper" badge.
   const addMemorial = useCallback(async (formData) => {
     const newSite = await dbAddMemorial(formData)  // throws on any error; rollback handled in service
-    setUserProgress(p => ({ ...p, addedMemorials: p.addedMemorials + 1 }))
+    setProgress(p => ({ ...p, addedMemorials: p.addedMemorials + 1 }))
     return newSite
-  }, [setUserProgress])
+  }, [])
 
   // New routes are also created as 'pending' → intentionally NOT added to the
   // `routes` list until a moderator approves them.
@@ -276,7 +332,7 @@ export function AppProvider({ children }) {
       pendingCandleIds.current.add(id)
 
       // 4. Unlock the "Candle Lighter" badge
-      setUserProgress(p => (p.litCandle ? p : { ...p, litCandle: true }))
+      setProgress(p => (p.litCandle ? p : { ...p, litCandle: true }))
     } catch {
       // 5. Roll back optimistic increment on failure
       setCandleCounts(prev => ({
@@ -284,7 +340,7 @@ export function AppProvider({ children }) {
         [siteId]: Math.max(0, (prev[siteId] ?? 1) - 1),
       }))
     }
-  }, [setUserProgress])
+  }, [])
 
   // ── Derived: filtered lists ───────────────────────────────────────────────
   const filteredSites = useMemo(
@@ -304,8 +360,8 @@ export function AppProvider({ children }) {
 
   // Saved routes resolved against the loaded routes list
   const savedRoutes = useMemo(
-    () => routes.filter(r => userProgress.savedRouteIds.includes(r.id)),
-    [routes, userProgress.savedRouteIds]
+    () => routes.filter(r => progress.savedRouteIds.includes(r.id)),
+    [routes, progress.savedRouteIds]
   )
 
   return (
@@ -329,13 +385,17 @@ export function AppProvider({ children }) {
       // candles
       candleCounts,
       lightCandle,
-      // saves / progress / badges
+      // saves / progress / badges (auth-backed; empty when logged out)
       savedRoutes,
-      savedRouteIds:    userProgress.savedRouteIds,
+      savedRouteIds:     progress.savedRouteIds,
       toggleSavedRoute,
-      completedRouteIds: userProgress.completedRouteIds,
+      completedRouteIds: progress.completedRouteIds,
       markRouteCompleted,
-      userProgress,
+      progress,
+      progressLoading,
+      // Kept under the old name for backwards-compatible consumers (ProfilePage,
+      // BADGES.test functions) that read `userProgress.{addedMemorials,litCandle}`.
+      userProgress: progress,
       // write
       addMemorial,
       addRoute,

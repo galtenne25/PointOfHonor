@@ -1,4 +1,5 @@
 import { supabase } from '../utils/supabase'
+import { getCurrentUserId, requireUserId } from './session'
 
 // Maps a DB row (+ joined galleries) → the UI shape expected by components
 function mapSite(row) {
@@ -119,6 +120,9 @@ export async function addMemorial({
     }
 
     // ── Step 2: insert the memorial row (status: pending → needs moderation) ──
+    // Attach the current user as owner so RLS + the Contributions badge work.
+    const userId = await getCurrentUserId()
+
     const baseRow = {
       name,
       description_snippet: description.slice(0, 120),
@@ -127,26 +131,29 @@ export async function addMemorial({
       latitude:            parseFloat(location.lat),
       longitude:           parseFloat(location.lng),
       category,
+      user_id:             userId,
     }
 
-    const insertPending = () => supabase
-      .from('memorial_sites')
-      .insert({ ...baseRow, status: 'pending' })
-      .select('*, site_galleries(image_url)')
-      .single()
-
-    let { data: row, error: insertError } = await insertPending()
-
-    // If the DB doesn't have the `status` column yet, don't block the user —
-    // retry without it (the schema_full_app.sql migration adds the column).
-    if (insertError && /'?status'? column|column .*status/i.test(insertError.message ?? '')) {
+    // Resilient insert: strip unknown columns and retry (works pre- and
+    // post-migration).
+    let payload = { ...baseRow, status: 'pending' }
+    let row, insertError
+    for (let attempt = 0; attempt < 6; attempt++) {
       ({ data: row, error: insertError } = await supabase
         .from('memorial_sites')
-        .insert(baseRow)
+        .insert(payload)
         .select('*, site_galleries(image_url)')
         .single())
+      if (!insertError) break
+      const m = (insertError.message || '').match(/Could not find the '([^']+)' column/i)
+              || (insertError.message || '').match(/column "([^"]+)" of relation/i)
+      if (m && m[1] in payload) {
+        const { [m[1]]: _omit, ...rest } = payload
+        payload = rest
+        continue
+      }
+      break
     }
-
     if (insertError) throw insertError
     insertedId = row.id
 
@@ -189,4 +196,93 @@ export async function addMemorial({
 
     throw err  // re-throw so AppContext can surface it to the UI
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Owner CRUD — the logged-in user managing their OWN pending submissions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns memorials owned by `userId` (any status — RLS lets the owner see
+ *  their own pending too). Newest first. */
+export async function getMyMemorials(userId) {
+  if (!userId) return []
+  const { data, error } = await supabase
+    .from('memorial_sites')
+    .select('*, site_galleries(image_url)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data.map(mapSite)
+}
+
+/** Update an OWN pending memorial. Scoped to the live session's user id (in
+ *  addition to RLS `ms_owner_update_pending`) so a mutation can never touch a
+ *  row the caller doesn't own — defense in depth against permission leaks. */
+export async function updateMemorial(id, patch) {
+  const uid = await requireUserId()
+  const { data, error } = await supabase
+    .from('memorial_sites')
+    .update({
+      ...(patch.name        !== undefined && { name: patch.name }),
+      ...(patch.description !== undefined && {
+        description_snippet: patch.description.slice(0, 120),
+        full_description:    patch.description,
+      }),
+      ...(patch.category    !== undefined && { category: patch.category }),
+      ...(patch.cover_image_url !== undefined && { cover_image_url: patch.cover_image_url }),
+      ...(patch.latitude    !== undefined && { latitude:  patch.latitude  }),
+      ...(patch.longitude   !== undefined && { longitude: patch.longitude }),
+    })
+    .eq('id', id)
+    .eq('user_id', uid)
+    .select('*, site_galleries(image_url)')
+    .single()
+  if (error) throw error
+  return mapSite(data)
+}
+
+/** Delete an OWN memorial. Scoped to the session user id on top of the
+ *  owner-or-admin delete RLS policy, so even a misconfigured DB can't let one
+ *  user delete another's row through this path. */
+export async function deleteMemorialOwn(id) {
+  const uid = await requireUserId()
+  const { error } = await supabase
+    .from('memorial_sites')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', uid)
+  if (error) throw error
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Admin moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns memorials awaiting moderator approval (admin RLS required). */
+export async function getPendingMemorials() {
+  const { data, error } = await supabase
+    .from('memorial_sites')
+    .select('*, site_galleries(image_url)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data.map(mapSite)
+}
+
+/** Approve a pending memorial — flips status to 'approved'. */
+export async function approveMemorial(id) {
+  const { error } = await supabase
+    .from('memorial_sites')
+    .update({ status: 'approved' })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Reject = delete (cascades to site_galleries by FK). */
+export async function rejectMemorial(id) {
+  const { error } = await supabase
+    .from('memorial_sites')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
 }

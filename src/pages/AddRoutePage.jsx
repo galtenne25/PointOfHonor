@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, CheckCircle, Loader2, Route as RouteIcon } from 'lucide-react'
+import { ChevronRight, Route as RouteIcon } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
+import { useToast } from '../contexts/ToastContext'
+import { Input, Textarea, Button, Field, ChipSelect } from '../components/ui'
 
 const REGIONS = [
   { value: 'north',  label: 'צפון'  },
@@ -22,103 +24,68 @@ const DIFFICULTY = [
   { value: 'קשה',    label: 'קשה'    },
 ]
 
-// Single-select chip group
-function ChipSelect({ options, value, onChange }) {
-  return (
-    <div className="flex flex-wrap gap-2 justify-end">
-      {options.map(opt => {
-        const active = value === opt.value
-        return (
-          <button
-            key={String(opt.value)}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className={`px-3.5 py-2 rounded-full text-sm font-medium transition-colors active:scale-95
-              ${active
-                ? 'bg-olive-700 text-white'
-                : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function Field({ label, children, error }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="text-sm font-semibold text-slate-700 text-right">{label}</label>
-      {children}
-      {error && <span className="text-xs text-red-500 mt-0.5 text-right">{error}</span>}
-    </div>
-  )
+function validate(f) {
+  const e = {}
+  if (!f.title.trim())                    e.title       = 'יש להזין שם למסלול'
+  else if (f.title.trim().length < 2)     e.title       = 'השם קצר מדי'
+  if (f.description.trim().length < 10)    e.description = 'התיאור חייב להכיל לפחות 10 תווים'
+  if (!f.region)                           e.region      = 'יש לבחור אזור'
+  const len = Number(f.lengthKm)
+  if (!f.lengthKm || isNaN(len) || len <= 0) e.lengthKm  = 'יש להזין אורך תקין בק"מ'
+  else if (len > 200)                       e.lengthKm   = 'אורך המסלול אינו סביר'
+  if (f.hasWater === null)                  e.hasWater    = 'יש לבחור זמינות מים'
+  if (!f.routeType)                         e.routeType   = 'יש לבחור סוג מסלול'
+  return e
 }
 
 export default function AddRoutePage() {
   const navigate = useNavigate()
   const { addRoute } = useApp()
-  const toastTimerRef = useRef(null)
+  const toast = useToast()
 
   const [form, setForm] = useState({
     title: '', description: '', startLocation: '', lengthKm: '',
     region: null, hasWater: null, routeType: null, difficulty: 'בינוני',
   })
-  const [errors,       setErrors      ] = useState({})
+  const [touched,      setTouched     ] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError,  setSubmitError ] = useState(null)
-  const [showToast,    setShowToast   ] = useState(false)
 
-  useEffect(() => () => clearTimeout(toastTimerRef.current), [])
+  const errors  = validate(form)
+  const showErr = key => (touched[key] ? errors[key] : undefined)
 
   const set = useCallback((key, val) => {
     setForm(prev => ({ ...prev, [key]: val }))
-    setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev))
+    setTouched(prev => ({ ...prev, [key]: true }))   // chips → validate live
   }, [])
+  const onText = useCallback(e => set(e.target.name, e.target.value), [set])
+  const onBlur = useCallback(e => setTouched(prev => ({ ...prev, [e.target.name]: true })), [])
 
   const handleSubmit = useCallback(async e => {
     e.preventDefault()
-    const next = {}
-    if (!form.title.trim())                       next.title       = 'יש להזין שם למסלול'
-    if (form.description.trim().length < 10)       next.description = 'התיאור חייב להכיל לפחות 10 תווים'
-    if (!form.region)                              next.region      = 'יש לבחור אזור'
-    const len = Number(form.lengthKm)
-    if (!form.lengthKm || isNaN(len) || len <= 0)  next.lengthKm    = 'יש להזין אורך תקין בק"מ'
-    if (form.hasWater === null)                    next.hasWater    = 'יש לבחור זמינות מים'
-    if (!form.routeType)                           next.routeType   = 'יש לבחור סוג מסלול'
-    if (Object.keys(next).length) { setErrors(next); return }
+    if (isSubmitting) return  // guard against double-submit (Enter while in-flight)
+    setTouched({ title: true, description: true, region: true, lengthKm: true, hasWater: true, routeType: true })
+    if (Object.keys(validate(form)).length > 0) return
 
-    setErrors({})
-    setSubmitError(null)
     setIsSubmitting(true)
     try {
       await addRoute({
         title:         form.title,
         description:   form.description,
         region:        form.region,
-        lengthKm:      len,
+        lengthKm:      Number(form.lengthKm),
         hasWater:      form.hasWater,
         routeType:     form.routeType,
         difficulty:    form.difficulty,
         startLocation: form.startLocation,
       })
-      setShowToast(true)
-      toastTimerRef.current = setTimeout(() => {
-        setShowToast(false)
-        navigate('/routes')
-      }, 3400)
+      toast.success('תודה! המסלול נשלח לבדיקה ויתווסף לאחר אישור המערכת.')
+      navigate('/routes')
     } catch (err) {
-      setSubmitError(err.message ?? 'שגיאה בשמירת המסלול. נסה שנית.')
+      toast.error(err.message ?? 'שגיאה בשמירת המסלול. נסה שנית.')
     } finally {
       setIsSubmitting(false)
     }
-  }, [navigate, addRoute, form])
-
-  const inputCls =
-    'w-full text-right bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 ' +
-    'text-sm text-slate-800 placeholder-slate-400 focus:outline-none ' +
-    'focus:ring-2 focus:ring-olive-300 focus:border-olive-500 transition-all'
+  }, [navigate, addRoute, form, toast, isSubmitting])
 
   return (
     <div dir="rtl" className="flex flex-col min-h-full">
@@ -140,104 +107,74 @@ export default function AddRoutePage() {
       <hr className="border-slate-100" />
 
       {/* ── Form ── */}
-      <form onSubmit={handleSubmit} className="flex-1 px-5 pt-6 pb-8 flex flex-col gap-6">
+      <form onSubmit={handleSubmit} noValidate className="flex-1 px-5 pt-6 pb-8 flex flex-col gap-6">
 
-        <Field label="שם המסלול" error={errors.title}>
-          <input
-            type="text"
-            value={form.title}
-            onChange={e => set('title', e.target.value)}
-            placeholder="לדוגמה: שביל הגבורה בעמק הבכא"
-            dir="rtl"
-            className={inputCls}
-          />
+        <Input
+          label="שם המסלול"
+          name="title"
+          required
+          value={form.title}
+          onChange={onText}
+          onBlur={onBlur}
+          placeholder="לדוגמה: שביל הגבורה בעמק הבכא"
+          error={showErr('title')}
+        />
+
+        <Textarea
+          label="תיאור המסלול"
+          name="description"
+          required
+          rows={4}
+          value={form.description}
+          onChange={onText}
+          onBlur={onBlur}
+          placeholder="ספר על המסלול, נקודות העניין והמשמעות ההיסטורית..."
+          error={showErr('description')}
+        />
+
+        <Field label="אזור בארץ" required error={showErr('region')}>
+          <ChipSelect options={REGIONS} value={form.region} onChange={v => set('region', v)} ariaLabel="אזור" />
         </Field>
 
-        <Field label="תיאור המסלול" error={errors.description}>
-          <textarea
-            value={form.description}
-            onChange={e => set('description', e.target.value)}
-            placeholder="ספר על המסלול, נקודות העניין והמשמעות ההיסטורית..."
-            dir="rtl"
-            rows={4}
-            className={`${inputCls} resize-none`}
-          />
+        <Input
+          label='אורך המסלול (ק"מ)'
+          name="lengthKm"
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.1"
+          required
+          value={form.lengthKm}
+          onChange={onText}
+          onBlur={onBlur}
+          placeholder="לדוגמה: 5.5"
+          error={showErr('lengthKm')}
+        />
+
+        <Field label="זמינות מים" required error={showErr('hasWater')}>
+          <ChipSelect options={WATER} value={form.hasWater} onChange={v => set('hasWater', v)} ariaLabel="זמינות מים" />
         </Field>
 
-        <Field label="אזור בארץ" error={errors.region}>
-          <ChipSelect options={REGIONS} value={form.region} onChange={v => set('region', v)} />
-        </Field>
-
-        <Field label='אורך המסלול (ק"מ)' error={errors.lengthKm}>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.1"
-            value={form.lengthKm}
-            onChange={e => set('lengthKm', e.target.value)}
-            placeholder="לדוגמה: 5.5"
-            dir="rtl"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="זמינות מים" error={errors.hasWater}>
-          <ChipSelect options={WATER} value={form.hasWater} onChange={v => set('hasWater', v)} />
-        </Field>
-
-        <Field label="סוג המסלול" error={errors.routeType}>
-          <ChipSelect options={TYPES} value={form.routeType} onChange={v => set('routeType', v)} />
+        <Field label="סוג המסלול" required error={showErr('routeType')}>
+          <ChipSelect options={TYPES} value={form.routeType} onChange={v => set('routeType', v)} ariaLabel="סוג המסלול" />
         </Field>
 
         <Field label="דרגת קושי">
-          <ChipSelect options={DIFFICULTY} value={form.difficulty} onChange={v => set('difficulty', v)} />
+          <ChipSelect options={DIFFICULTY} value={form.difficulty} onChange={v => set('difficulty', v)} ariaLabel="דרגת קושי" />
         </Field>
 
-        <Field label="נקודת זינוק (לא חובה)">
-          <input
-            type="text"
-            value={form.startLocation}
-            onChange={e => set('startLocation', e.target.value)}
-            placeholder="לדוגמה: חניון יער ביריה"
-            dir="rtl"
-            className={inputCls}
-          />
-        </Field>
+        <Input
+          label="נקודת זינוק (לא חובה)"
+          name="startLocation"
+          value={form.startLocation}
+          onChange={onText}
+          placeholder="לדוגמה: חניון יער ביריה"
+        />
 
-        {submitError && (
-          <p className="text-sm text-red-500 text-center font-medium">{submitError}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full flex items-center justify-center gap-2
-                     bg-olive-700 text-white font-bold text-base py-4 rounded-2xl shadow-sm
-                     hover:bg-olive-800 active:scale-[0.98]
-                     disabled:opacity-70 disabled:cursor-not-allowed
-                     transition-all duration-150"
-        >
-          {isSubmitting
-            ? <><Loader2 size={18} className="animate-spin" /><span>שולח...</span></>
-            : <><RouteIcon size={18} strokeWidth={2} /><span>שלח מסלול לאישור</span></>
-          }
-        </button>
+        <Button type="submit" size="lg" fullWidth loading={isSubmitting} icon={RouteIcon}>
+          {isSubmitting ? 'שולח...' : 'שלח מסלול לאישור'}
+        </Button>
       </form>
-
-      {/* ── Success toast ── */}
-      <div
-        className={`fixed top-20 left-4 right-4 max-w-md mx-auto z-[2000]
-          flex items-center gap-3 bg-olive-700 text-white px-4 py-3.5 rounded-2xl shadow-2xl
-          transition-all duration-300
-          ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'}`}
-      >
-        <CheckCircle size={20} strokeWidth={2.2} className="flex-shrink-0" />
-        <p className="text-sm font-semibold leading-snug text-right">
-          תודה! המסלול נשלח לבדיקה ויתווסף לאחר אישור המערכת.
-        </p>
-      </div>
-
     </div>
   )
 }

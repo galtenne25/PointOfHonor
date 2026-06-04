@@ -1,10 +1,11 @@
-import { useState, useCallback, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvent } from 'react-leaflet'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, useMapEvent, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
+import { useToast } from '../contexts/ToastContext'
 import FilterSheet from '../components/common/FilterSheet'
 
 const ISRAEL_CENTER = [31.5, 35.0]
@@ -38,23 +39,65 @@ function MapTapHandler({ onTap }) {
   return null
 }
 
-function LocateControl({ onLocationError }) {
-  const map = useMapEvent('locationfound', e => {
-    map.flyTo(e.latlng, 14)
-  })
-  useMapEvent('locationerror', () => {
-    onLocationError()
-  })
+// Exposes the Leaflet map instance to the parent (replaces the old
+// document.querySelector('.leaflet-container')._leaflet_map hack).
+function MapRefSetter({ mapRef }) {
+  const map = useMap()
+  useEffect(() => { mapRef.current = map }, [map, mapRef])
   return null
+}
+
+// Pulsing "you are here" marker (blue dot + animated ring).
+function userLocationIcon() {
+  return L.divIcon({
+    className: '',
+    html: `
+      <div style="position:relative;width:22px;height:22px;">
+        <div style="position:absolute;inset:0;border-radius:9999px;background:#3b82f6;opacity:.35;animation:locatePing 1.8s ease-out infinite;"></div>
+        <div style="position:absolute;top:50%;left:50%;width:14px;height:14px;transform:translate(-50%,-50%);border-radius:9999px;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.45);"></div>
+      </div>`,
+    iconSize:   [22, 22],
+    iconAnchor: [11, 11],
+  })
 }
 
 export default function MapPage() {
   const navigate = useNavigate()
   const { sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery } = useApp()
+  const toast = useToast()
 
   const [selectedSite, setSelectedSite] = useState(null)
   const [filterOpen,   setFilterOpen  ] = useState(false)
-  const [geoError,     setGeoError    ] = useState(false)
+  const [userLocation, setUserLocation] = useState(null)
+  const [locating,     setLocating    ] = useState(false)
+  const mapRef = useRef(null)
+
+  const handleLocate = useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      toast.error('הדפדפן אינו תומך באיתור מיקום')
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setUserLocation(loc)
+        setLocating(false)
+        mapRef.current?.flyTo([loc.lat, loc.lng], 14, { duration: 1.2 })
+      },
+      err => {
+        setLocating(false)
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? 'הגישה למיקום נדחתה. יש לאשר הרשאת מיקום בהגדרות הדפדפן.'
+            : err.code === err.TIMEOUT
+              ? 'איתור המיקום ארך זמן רב מדי. נסה/י שוב.'
+              : 'לא ניתן לאתר את המיקום כעת. ודא/י שה-GPS פעיל.'
+        toast.error(msg)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }, [toast])
 
   const handleMarkerClick = useCallback(site => {
     setSelectedSite(prev => (prev?.id === site.id ? null : site))
@@ -87,7 +130,17 @@ export default function MapPage() {
         />
 
         <MapTapHandler onTap={dismiss} />
-        <LocateControl onLocationError={() => setGeoError(true)} />
+        <MapRefSetter mapRef={mapRef} />
+
+        {userLocation && (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={userLocationIcon()}
+            interactive={false}
+            keyboard={false}
+            zIndexOffset={1000}
+          />
+        )}
 
         <MarkerClusterGroup chunkedLoading>
           {siteIcons
@@ -218,16 +271,17 @@ export default function MapPage() {
 
       {/* ── Locate Me FAB ── */}
       <button
-        onClick={() => {
-          setGeoError(false)
-          const map = document.querySelector('.leaflet-container')._leaflet_map
-          map.locate()
-        }}
+        onClick={handleLocate}
+        disabled={locating}
+        aria-label="אתר את מיקומי"
         className="absolute right-4 bottom-24 z-[999] w-12 h-12 bg-white rounded-full shadow-lg
                    flex items-center justify-center text-olive-700
-                   hover:bg-slate-50 active:scale-95 transition-all"
+                   hover:bg-slate-50 active:scale-95 disabled:cursor-wait
+                   transition-all"
       >
-        <LocateFixed size={20} strokeWidth={2.5} />
+        {locating
+          ? <Loader2 size={20} strokeWidth={2.5} className="animate-spin" />
+          : <LocateFixed size={20} strokeWidth={2.5} />}
       </button>
 
       {/* ── Add Point FAB ── */}
@@ -240,18 +294,6 @@ export default function MapPage() {
         >
           <Plus size={16} strokeWidth={2.5} />
           <span>הוסף נקודה</span>
-        </button>
-      </div>
-
-      {/* ── Geo error toast ── */}
-      <div className={`fixed top-20 left-4 right-4 max-w-md mx-auto z-[2000]
-                       flex items-center gap-3 bg-red-600 text-white px-4 py-3.5 rounded-2xl
-                       shadow-xl transition-all duration-300
-                       ${geoError ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'}`}>
-        <span className="text-xl">📍</span>
-        <p className="text-sm font-semibold">לא ניתן לאתר את המיקום שלך. ודא שהרשאות ה-GPS מופעלות.</p>
-        <button onClick={() => setGeoError(false)} className="mr-auto text-white/80 hover:text-white">
-          <X size={16} />
         </button>
       </div>
 

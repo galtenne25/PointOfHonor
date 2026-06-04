@@ -1,56 +1,92 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Upload, MapPin, CheckCircle, Loader2, X } from 'lucide-react'
+import { ChevronRight, Upload, MapPin, X } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvent } from 'react-leaflet'
 import L from 'leaflet'
 import { useApp } from '../contexts/AppContext'
+import { useToast } from '../contexts/ToastContext'
+import { Input, Textarea, Button, Field } from '../components/ui'
+
+const MAX_IMAGES   = 10
+const MAX_FILE_MB  = 5
+const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024
+
+// Pure validators → enables real-time (on-change / on-blur) validation.
+function validate(form, pickedLocation) {
+  const e = {}
+  if (!form.name.trim())                       e.name        = 'יש להזין את שם האתר'
+  else if (form.name.trim().length < 2)        e.name        = 'השם קצר מדי'
+  if (!pickedLocation)                         e.location    = 'יש לבחור מיקום על המפה'
+  if (form.description.trim().length < 10)     e.description  = 'התיאור חייב להכיל לפחות 10 תווים'
+  return e
+}
 
 export default function AddPointPage() {
   const navigate    = useNavigate()
   const { addMemorial } = useApp()
-  const toastTimerRef = useRef(null)
+  const toast = useToast()
 
   const [form,           setForm          ] = useState({ name: '', description: '' })
   const [images,         setImages        ] = useState([])
   const [isSubmitting,   setIsSubmitting  ] = useState(false)
-  const [showToast,      setShowToast     ] = useState(false)
-  const [submitError,    setSubmitError   ] = useState(null)
   const [pickedLocation, setPickedLocation] = useState(null)
   const [mapModalOpen,   setMapModalOpen  ] = useState(false)
-  const [errors,         setErrors        ] = useState({})
+  const [touched,        setTouched       ] = useState({})
 
-  useEffect(() => {
-    return () => { images.forEach(img => URL.revokeObjectURL(img.url)) }
-  }, [images])
+  const errors  = validate(form, pickedLocation)
+  const showErr = key => (touched[key] ? errors[key] : undefined)
 
-  useEffect(() => {
-    return () => clearTimeout(toastTimerRef.current)
+  // Revoke object URLs only on unmount (kept in a ref so the effect stays
+  // mount-only — avoids the classic "revoke a still-mounted URL" bug).
+  const imagesRef = useRef(images)
+  imagesRef.current = images
+  useEffect(() => () => imagesRef.current.forEach(img => URL.revokeObjectURL(img.url)), [])
+
+  const handleChange = useCallback(e => {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
   }, [])
 
-  const handleChange = useCallback(
-    e => setForm(prev => ({ ...prev, [e.target.name]: e.target.value })),
-    []
-  )
+  const markTouched = useCallback(e => {
+    setTouched(prev => ({ ...prev, [e.target.name]: true }))
+  }, [])
 
   const handleImages = useCallback(e => {
-    const entries = Array.from(e.target.files).map(f => ({ url: URL.createObjectURL(f), file: f }))
-    setImages(prev => [...prev, ...entries].slice(0, 10))
+    const incoming = Array.from(e.target.files)
+    e.target.value = '' // allow re-selecting the same file later
+    const accepted = []
+    const rejected = []
+    for (const f of incoming) {
+      if (!f.type.startsWith('image/'))      rejected.push(`${f.name} — קובץ שאינו תמונה`)
+      else if (f.size > MAX_FILE_SIZE)       rejected.push(`${f.name} — גדול מ-${MAX_FILE_MB}MB`)
+      else accepted.push({ url: URL.createObjectURL(f), file: f, id: `${f.name}-${f.size}-${f.lastModified}` })
+    }
+    if (rejected.length) toast.error(`חלק מהקבצים נדחו: ${rejected.join(' · ')}`)
+
+    setImages(prev => {
+      const room = MAX_IMAGES - prev.length
+      if (room <= 0) { toast.error(`ניתן להעלות עד ${MAX_IMAGES} תמונות`); return prev }
+      const slice = accepted.slice(0, room)
+      if (accepted.length > room) toast.info(`נוספו ${room} תמונות בלבד (מקסימום ${MAX_IMAGES})`)
+      return [...prev, ...slice]
+    })
+  }, [toast])
+
+  const removeImage = useCallback(id => {
+    setImages(prev => {
+      const target = prev.find(img => img.id === id)
+      if (target) URL.revokeObjectURL(target.url)
+      return prev.filter(img => img.id !== id)
+    })
   }, [])
 
   const handleSubmit = useCallback(async e => {
     e.preventDefault()
-    const newErrors = {}
-    if (!form.name.trim()) newErrors.name = 'יש להזין את שם האתר'
-    if (!pickedLocation)   newErrors.location = 'יש לבחור מיקום על המפה'
-    if (form.description.trim().length < 10) newErrors.description = 'התיאור חייב להכיל לפחות 10 תווים'
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
-    }
-    setErrors({})
-    setSubmitError(null)
-    setIsSubmitting(true)
+    if (isSubmitting) return  // guard against double-submit (Enter while in-flight)
+    setTouched({ name: true, location: true, description: true })
+    if (Object.keys(validate(form, pickedLocation)).length > 0) return
 
+    setIsSubmitting(true)
     try {
       await addMemorial({
         name:        form.name.trim(),
@@ -58,22 +94,18 @@ export default function AddPointPage() {
         location:    pickedLocation,
         imageFiles:  images.map(img => img.file),
       })
-
+      images.forEach(img => URL.revokeObjectURL(img.url))
       setForm({ name: '', description: '' })
       setImages([])
       setPickedLocation(null)
-      setShowToast(true)
-
-      toastTimerRef.current = setTimeout(() => {
-        setShowToast(false)
-        navigate('/map')
-      }, 3200)
+      toast.success('תודה! הנקודה נשלחה לבדיקה ותופיע במפה לאחר אישור המערכת.')
+      navigate('/map')
     } catch (err) {
-      setSubmitError(err.message ?? 'שגיאה בשמירת הנקודה. נסה שנית.')
+      toast.error(err.message ?? 'שגיאה בשמירת הנקודה. נסה שנית.')
     } finally {
       setIsSubmitting(false)
     }
-  }, [navigate, addMemorial, form, pickedLocation, images])
+  }, [navigate, addMemorial, form, pickedLocation, images, toast, isSubmitting])
 
   return (
     <div dir="rtl" className="flex flex-col min-h-full">
@@ -95,31 +127,25 @@ export default function AddPointPage() {
       <hr className="border-slate-100" />
 
       {/* ── Form ── */}
-      <form onSubmit={handleSubmit} className="flex-1 px-5 pt-6 pb-8 flex flex-col gap-6">
+      <form onSubmit={handleSubmit} noValidate className="flex-1 px-5 pt-6 pb-8 flex flex-col gap-6">
 
-        {/* 1 · Site name */}
-        <Field label="שם האנדרטה / האתר">
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="לדוגמה: מצפה דני כהן"
-            dir="rtl"
-            required
-            className="w-full text-right bg-slate-50 border border-slate-200 rounded-xl
-                       px-4 py-3 text-sm text-slate-800 placeholder-slate-400
-                       focus:outline-none focus:ring-2 focus:ring-olive-300 focus:border-olive-500
-                       transition-all"
-          />
-          {errors.name && <span className="text-xs text-red-500 mt-1">{errors.name}</span>}
-        </Field>
+        <Input
+          label="שם האנדרטה / האתר"
+          name="name"
+          required
+          value={form.name}
+          onChange={handleChange}
+          onBlur={markTouched}
+          placeholder="לדוגמה: מצפה דני כהן"
+          error={showErr('name')}
+        />
 
-        {/* 2 · Map location placeholder */}
-        <Field label="מיקום על המפה">
+        {/* Map location picker */}
+        <Field label="מיקום על המפה" required error={showErr('location')}>
           <div
             onClick={() => setMapModalOpen(true)}
-            className="relative h-36 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
+            className={`relative h-36 rounded-2xl overflow-hidden border cursor-pointer
+                        ${showErr('location') ? 'border-red-300' : 'border-slate-200'}`}
           >
             <img
               src="https://picsum.photos/seed/mapplaceholder/800/300"
@@ -137,11 +163,10 @@ export default function AddPointPage() {
               </span>
             </div>
           </div>
-          {errors.location && <span className="text-xs text-red-500 mt-1">{errors.location}</span>}
         </Field>
 
-        {/* 3 · Image upload */}
-        <Field label="תמונות">
+        {/* Image upload */}
+        <Field label="תמונות" hint={`JPG, PNG · עד ${MAX_FILE_MB}MB לתמונה · עד ${MAX_IMAGES} תמונות`}>
           <label
             htmlFor="img-upload"
             className="flex flex-col items-center justify-center gap-2 py-7
@@ -151,7 +176,6 @@ export default function AddPointPage() {
           >
             <Upload size={28} className="text-slate-400" strokeWidth={1.5} />
             <p className="text-sm font-medium text-slate-600">הוסף תמונות לאתר</p>
-            <p className="text-xs text-slate-400">JPG, PNG — עד 10 תמונות</p>
             <input
               type="file"
               id="img-upload"
@@ -164,81 +188,47 @@ export default function AddPointPage() {
 
           {images.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-2">
-              {images.map((img, i) => (
-                <div key={i} className="aspect-square rounded-xl overflow-hidden bg-slate-100">
+              {images.map(img => (
+                <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 group">
                   <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.id)}
+                    aria-label="הסר תמונה"
+                    className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full
+                               bg-black/55 text-white flex items-center justify-center
+                               hover:bg-black/75 active:scale-90 transition-all"
+                  >
+                    <X size={13} strokeWidth={2.6} />
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </Field>
 
-        {/* 4 · Description */}
-        <Field label="תיאור / סיפור ההנצחה">
-          <textarea
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-            placeholder="ספר את הסיפור מאחורי המקום..."
-            dir="rtl"
-            rows={5}
-            className="w-full text-right bg-slate-50 border border-slate-200 rounded-xl
-                       px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none
-                       focus:outline-none focus:ring-2 focus:ring-olive-300 focus:border-olive-500
-                       transition-all"
-          />
-          {errors.description && <span className="text-xs text-red-500 mt-1">{errors.description}</span>}
-        </Field>
+        <Textarea
+          label="תיאור / סיפור ההנצחה"
+          name="description"
+          required
+          rows={5}
+          value={form.description}
+          onChange={handleChange}
+          onBlur={markTouched}
+          placeholder="ספר את הסיפור מאחורי המקום..."
+          error={showErr('description')}
+        />
 
-        {/* Server error */}
-        {submitError && (
-          <p className="text-sm text-red-500 text-center font-medium">{submitError}</p>
-        )}
-
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full flex items-center justify-center gap-2
-                     bg-olive-700 text-white font-bold text-base
-                     py-4 rounded-2xl shadow-sm
-                     hover:bg-olive-800 active:scale-[0.98]
-                     disabled:opacity-70 disabled:cursor-not-allowed
-                     transition-all duration-150"
-        >
-          {isSubmitting
-            ? <><Loader2 size={18} className="animate-spin" /><span>שולח...</span></>
-            : <span>שלח לאישור</span>
-          }
-        </button>
-
+        <Button type="submit" size="lg" fullWidth loading={isSubmitting}>
+          {isSubmitting ? 'שולח...' : 'שלח לאישור'}
+        </Button>
       </form>
-
-      {/* ── Success toast ── */}
-      <div
-        className={`
-          fixed top-20 left-4 right-4 max-w-md mx-auto z-[2000]
-          flex items-center gap-3
-          bg-olive-700 text-white px-4 py-3.5 rounded-2xl shadow-2xl
-          transition-all duration-300
-          ${showToast
-            ? 'opacity-100 translate-y-0'
-            : 'opacity-0 -translate-y-3 pointer-events-none'}
-        `}
-      >
-        <CheckCircle size={20} strokeWidth={2.2} className="flex-shrink-0" />
-        <p className="text-sm font-semibold leading-snug text-right">
-          תודה! הנקודה נשלחה לבדיקה ותופיע במפה לאחר אישור המערכת.
-        </p>
-      </div>
 
       <MapPickerModal
         isOpen={mapModalOpen}
         onClose={() => setMapModalOpen(false)}
         onConfirm={loc => setPickedLocation(loc)}
-        pickedLocation={pickedLocation}
       />
-
     </div>
   )
 }
@@ -314,29 +304,16 @@ function MapPickerModal({ isOpen, onClose, onConfirm }) {
           </MapContainer>
         </div>
         <div className="px-5 py-4 border-t border-slate-200 flex-shrink-0">
-          <button
-            onClick={() => { if (tempLocation) { onConfirm(tempLocation); onClose() } }}
+          <Button
+            fullWidth
+            rounded="full"
             disabled={!tempLocation}
-            className="w-full py-3.5 bg-olive-700 text-white text-sm font-bold rounded-full
-                       disabled:bg-slate-300 disabled:cursor-not-allowed
-                       hover:bg-olive-800 active:scale-95 transition-all duration-150"
+            onClick={() => { if (tempLocation) { onConfirm(tempLocation); onClose() } }}
           >
             אשר מיקום
-          </button>
+          </Button>
         </div>
       </div>
     </>
-  )
-}
-
-// ── Shared label + field wrapper ─────────────────────────────────────────────
-function Field({ label, children }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="text-sm font-semibold text-slate-700 text-right">
-        {label}
-      </label>
-      {children}
-    </div>
   )
 }

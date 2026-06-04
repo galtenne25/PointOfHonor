@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './contexts/AppContext'
+import { ToastProvider } from './contexts/ToastContext'
+import { AuthProvider } from './contexts/AuthContext'
+import { ConfirmProvider } from './contexts/ConfirmContext'
+import { RequireAuth, RequireAdmin } from './components/RequireAuth'
 import Layout from './components/Layout'
 import MapPage from './pages/MapPage'
 import MemorialsPage from './pages/MemorialsPage'
@@ -10,6 +14,12 @@ import RouteDetailPage from './pages/RouteDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import AddPointPage from './pages/AddPointPage'
 import AddRoutePage from './pages/AddRoutePage'
+import AuthPage from './pages/AuthPage'
+import AdminPage from './pages/AdminPage'
+import EditProfilePage from './pages/EditProfilePage'
+import MySubmissionsPage from './pages/MySubmissionsPage'
+import EditMemorialPage from './pages/EditMemorialPage'
+import EditRoutePage from './pages/EditRoutePage'
 import NotFoundPage from './pages/NotFoundPage'
 import OnboardingPage from './pages/OnboardingPage'
 import SoldierProfilePage from './pages/SoldierProfilePage'
@@ -28,7 +38,10 @@ export default function App() {
   }, [])
 
   return (
+    <ToastProvider>
+    <AuthProvider>
     <AppProvider>
+    <ConfirmProvider>
     <Routes>
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/routes/:id/navigate" element={<ActiveNavigationPage />} />
@@ -40,13 +53,22 @@ export default function App() {
         <Route path="/routes" element={<RoutesPage />} />
         <Route path="/routes/:id" element={<RouteDetailPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/add-point" element={<AddPointPage />} />
-        <Route path="/add-route" element={<AddRoutePage />} />
+        <Route path="/profile/edit"    element={<RequireAuth><EditProfilePage /></RequireAuth>} />
+        <Route path="/my-submissions"  element={<RequireAuth><MySubmissionsPage /></RequireAuth>} />
+        <Route path="/edit-point/:id"  element={<RequireAuth><EditMemorialPage /></RequireAuth>} />
+        <Route path="/edit-route/:id"  element={<RequireAuth><EditRoutePage /></RequireAuth>} />
+        <Route path="/auth"    element={<AuthPage />} />
+        <Route path="/add-point" element={<RequireAuth><AddPointPage /></RequireAuth>} />
+        <Route path="/add-route" element={<RequireAuth><AddRoutePage /></RequireAuth>} />
+        <Route path="/admin"     element={<RequireAdmin><AdminPage /></RequireAdmin>} />
         <Route path="/soldiers/:id" element={<SoldierProfilePage />} />
         <Route path="/community" element={<CommunityFeedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
+    </ConfirmProvider>
     </AppProvider>
+    </AuthProvider>
+    </ToastProvider>
   )
 }

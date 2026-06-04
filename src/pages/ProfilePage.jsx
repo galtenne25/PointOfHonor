@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RouteIcon, CheckCircle2, MapPin, Award, Users, Lock, Plus, ChevronLeft } from 'lucide-react'
+import { RouteIcon, CheckCircle2, MapPin, Award, Users, Lock, Plus, ChevronLeft, LogIn, LogOut, ShieldCheck, Pencil, ListChecks } from 'lucide-react'
 import { useApp, BADGES } from '../contexts/AppContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import RouteListItem from '../components/routes/RouteListItem'
 import StatsSheet from '../components/common/StatsSheet'
+import { Button, EmptyState as UIEmptyState } from '../components/ui'
 
 const TABS = [
   { id: 'saved',         label: 'מסלולים שמורים' },
@@ -69,15 +72,61 @@ function BadgeCard({ badge, earned }) {
   )
 }
 
+function memberSince(iso) {
+  if (!iso) return 'חבר חדש'
+  try {
+    const d = new Date(iso)
+    return `חבר/ה מאז ${d.toLocaleDateString('he-IL', { year: 'numeric', month: 'long' })}`
+  } catch { return 'חבר חדש' }
+}
+
+function SignedOutGate({ onSignIn }) {
+  return (
+    <div dir="rtl" className="flex-1 px-5 py-10">
+      <UIEmptyState
+        icon={LogIn}
+        title="התחבר/י לחשבון שלך"
+        message="כניסה תאפשר לשמור מסלולים, לסמן השלמות, לצבור תגים ולעקוב אחר התרומות שלך לקהילה."
+        action={<Button size="lg" icon={LogIn} onClick={onSignIn}>התחברות / הרשמה</Button>}
+      />
+    </div>
+  )
+}
+
+function ProfileLoading() {
+  return (
+    <div dir="rtl" className="flex-1 flex items-center justify-center py-20">
+      <div className="w-10 h-10 rounded-full border-2 border-olive-200 border-t-olive-700 animate-spin" />
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const { user, profile, loading: authLoading, isAdmin, signOut, profileLooksDefault } = useAuth()
+  const toast = useToast()
   const {
     routes, routesLoading,
     savedRoutes, completedRouteIds, userProgress,
   } = useApp()
 
+  // IMPORTANT: every hook must run on every render — no conditional hooks!
+  // The auth gates below are early *returns*, so any useState/useCallback
+  // beyond this point would cause a "Rendered more hooks than during the
+  // previous render" crash the moment auth resolves.
   const [activeTab,  setActiveTab ] = useState('saved')
   const [statsSheet, setStatsSheet] = useState(null)
+
+  // Diagnostic — verify auth + profile arrive correctly. Remove once stable.
+  console.log('[Profile] render', { authLoading, hasUser: !!user, userId: user?.id, hasProfile: !!profile, routesLoading, savedCount: savedRoutes?.length })
+
+  // ── Auth gates (early returns AFTER all hooks above) ─────────────────────
+  if (authLoading)  return <ProfileLoading />
+  if (!user)        return <SignedOutGate onSignIn={() => navigate('/auth')} />
+
+  const displayName  = profile?.full_name?.trim() || user.email?.split('@')[0] || 'משתמש/ת'
+  const memberLabel  = memberSince(profile?.created_at || user.created_at)
+  const avatarSrc    = profile?.avatar_url || `https://picsum.photos/seed/nz-user-${user.id}/200/200`
 
   const completedRoutes = routes.filter(r => completedRouteIds.includes(r.id))
   const earnedBadges    = BADGES.filter(b => b.test(userProgress))
@@ -93,7 +142,7 @@ export default function ProfilePage() {
     },
     {
       icon: MapPin, value: userProgress.addedMemorials, label: 'נקודות שהוספתי',
-      onClick: () => navigate('/add-point'),
+      onClick: () => navigate('/my-submissions'),
     },
     {
       icon: Award, value: earnedBadges.length, label: 'תגים שהושגו',
@@ -131,23 +180,82 @@ export default function ProfilePage() {
     <div dir="rtl" className="flex flex-col min-h-full pb-4">
 
       {/* ── User header ── */}
-      <div className="bg-white px-5 pt-5 pb-4 flex items-center gap-4 border-b border-slate-100">
-        <div className="flex-1 flex flex-col items-end">
-          <p className="text-lg font-bold text-slate-800">גל טנא</p>
-          <p className="text-sm text-slate-400 mt-0.5">חבר מאז ינואר 2024</p>
-          <span className="mt-1.5 inline-block bg-olive-100 text-olive-700
-                           text-xs font-semibold px-2.5 py-0.5 rounded-full">
-            תורם פעיל
-          </span>
+      <div className="bg-white px-5 pt-5 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-4">
+          <div className="flex-1 flex flex-col items-end min-w-0">
+            <p className="text-lg font-bold text-slate-800 truncate max-w-full">{displayName}</p>
+            <p className="text-sm text-slate-400 mt-0.5">{memberLabel}</p>
+            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap justify-end">
+              <span className="inline-block bg-olive-100 text-olive-700
+                             text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                תורם פעיל
+              </span>
+              {isAdmin && (
+                <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700
+                                 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                  <ShieldCheck size={11} strokeWidth={2.4} />
+                  מנהל
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-olive-200 flex-shrink-0">
+            <img
+              src={avatarSrc}
+              alt={displayName}
+              className="w-full h-full object-cover"
+            />
+          </div>
         </div>
-        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-olive-200 flex-shrink-0">
-          <img
-            src="https://picsum.photos/seed/useravatar/200/200"
-            alt="תמונת פרופיל"
-            className="w-full h-full object-cover"
-          />
+
+        <div className="flex gap-2 mt-4 flex-wrap">
+          <Button
+            size="sm" rounded="full" variant="secondary" icon={Pencil}
+            onClick={() => navigate('/profile/edit')}
+          >
+            ערוך פרופיל
+          </Button>
+          <Button
+            size="sm" rounded="full" variant="secondary" icon={ListChecks}
+            onClick={() => navigate('/my-submissions')}
+          >
+            התרומות שלי
+          </Button>
+          {isAdmin && (
+            <Button
+              size="sm" rounded="full" variant="secondary" icon={ShieldCheck}
+              onClick={() => navigate('/admin')}
+            >
+              פאנל ניהול
+            </Button>
+          )}
+          <Button
+            size="sm" rounded="full" variant="ghost" icon={LogOut}
+            onClick={async () => {
+              await signOut()
+              toast.info('התנתקת בהצלחה')
+            }}
+          >
+            התנתקות
+          </Button>
         </div>
       </div>
+
+      {/* ── Soft nudge to complete profile (replaces the previous forced redirect) ── */}
+      {profileLooksDefault && (
+        <div className="mx-5 mt-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200
+                        flex items-center justify-between gap-2">
+          <button
+            onClick={() => navigate('/profile/edit')}
+            className="text-xs font-bold text-amber-800 underline-offset-2 hover:underline"
+          >
+            השלם/י עכשיו
+          </button>
+          <p className="text-xs text-amber-800 text-right leading-snug flex-1">
+            הפרופיל שלך עדיין לא מלא — הוסף/הוסיפי שם ותמונה
+          </p>
+        </div>
+      )}
 
       {/* ── Community feed link ── */}
       <button
