@@ -254,29 +254,63 @@ const ROUTE_TITLES = [
   'דרך הברית', 'מסע אל הנצח', 'שביל הדמעות והגאווה', 'נתיב המורשת',
 ]
 
+// Length bands cycled across the routes so the dataset gets a healthy mix of
+// short/medium/long trails instead of "everything > 8km".
+const LENGTH_BANDS = [
+  { key: 'short', maxKm: 3,  maxStops: 3 },
+  { key: 'mid',   maxKm: 8,  maxStops: 4 },
+  { key: 'long',  maxKm: 99, maxStops: 6 },
+]
+
+// Grow a route from a random seed by repeatedly appending the NEAREST unused
+// site, stopping once the cumulative distance would cross the band ceiling
+// (always keeps ≥2 stops so a route is never a single point). Bounding distance
+// at *selection* time — not just ordering random picks — is what creates the
+// short/mid/long variety.
+function buildBoundedRoute(pool, band) {
+  const remaining = [...pool]
+  // Seed selection: the short/mid bands sample a few candidates and keep the
+  // one with the closest neighbour, so the route can actually stay within the
+  // band even in sparse regions. The long band just takes a random seed.
+  let startIdx = Math.floor(rnd() * remaining.length)
+  if (band.maxKm < 99) {
+    let best = Infinity
+    for (let t = 0; t < 5; t++) {
+      const ci = Math.floor(rnd() * remaining.length)
+      const cs = remaining[ci]
+      let nn = Infinity
+      remaining.forEach((s, idx) => {
+        if (idx === ci) return
+        const dd = haversineKm(cs.latitude, cs.longitude, s.latitude, s.longitude)
+        if (dd < nn) nn = dd
+      })
+      if (nn < best) { best = nn; startIdx = ci }
+    }
+  }
+  const ordered   = [remaining.splice(startIdx, 1)[0]]
+  let dist = 0
+  while (remaining.length && ordered.length < band.maxStops) {
+    const last = ordered[ordered.length - 1]
+    let bi = 0, bd = Infinity
+    remaining.forEach((s, idx) => {
+      const dd = haversineKm(last.latitude, last.longitude, s.latitude, s.longitude)
+      if (dd < bd) { bd = dd; bi = idx }
+    })
+    if (ordered.length >= 2 && dist + bd > band.maxKm) break
+    dist += bd
+    ordered.push(remaining.splice(bi, 1)[0])
+  }
+  return { ordered, dist: Math.round(dist * 10) / 10 }
+}
+
 function generateRoutes(sitesByRegion) {
   const routes = []
   const regions = Object.keys(sitesByRegion).filter(r => sitesByRegion[r].length >= 4)
   for (let i = 0; i < N_ROUTES; i++) {
     const region = regions[i % regions.length]
     const pool   = sitesByRegion[region]
-    const n      = Math.min(pool.length, ri(4, 6))
-    const chosen = some(pool, n)
-    // nearest-neighbour order
-    const ordered = [chosen.shift()]
-    while (chosen.length) {
-      const last = ordered[ordered.length - 1]
-      let bi = 0, bd = Infinity
-      chosen.forEach((s, idx) => {
-        const dd = haversineKm(last.latitude, last.longitude, s.latitude, s.longitude)
-        if (dd < bd) { bd = dd; bi = idx }
-      })
-      ordered.push(chosen.splice(bi, 1)[0])
-    }
-    let dist = 0
-    for (let k = 1; k < ordered.length; k++)
-      dist += haversineKm(ordered[k-1].latitude, ordered[k-1].longitude, ordered[k].latitude, ordered[k].longitude)
-    dist = Math.round(dist * 10) / 10
+    const band   = LENGTH_BANDS[i % LENGTH_BANDS.length]
+    const { ordered, dist } = buildBoundedRoute(pool, band)
     const diff = pick(REGIONS.find(r => r[0] === region) ? [REGIONS.find(r => r[0] === region)[6]] : ['בינוני'])
     routes.push({
       _sites: ordered,

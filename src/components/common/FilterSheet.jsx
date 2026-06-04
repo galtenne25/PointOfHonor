@@ -84,11 +84,11 @@ function SheetShell({ onClose, onReset, title, children, footer }) {
  * `values`  : { [key]: selectedValue | 'all' }
  * `onChange`: (key, value) => void   (single-select per group; re-pick clears)
  */
-function ControlledFilterSheet({ isOpen, onClose, groups, values, onChange, onReset }) {
+function ControlledFilterSheet({ isOpen, onClose, groups, values, onChange, onReset, title = 'סינון מסלולים' }) {
   if (!isOpen) return null
   const activeCount = Object.values(values).filter(v => v && v !== 'all').length
   return (
-    <SheetShell title="סינון מסלולים" onClose={onClose} onReset={onReset}>
+    <SheetShell title={title} onClose={onClose} onReset={onReset}>
       {groups.map(group => (
         <div key={group.key}>
           <h3 className="text-sm font-semibold text-slate-700 mb-2.5 text-right">

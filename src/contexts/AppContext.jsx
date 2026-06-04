@@ -73,6 +73,38 @@ export const ROUTE_FILTER_GROUPS = [
 
 const ROUTE_FILTERS_INIT = { length: 'all', region: 'all', type: 'all', water: 'all' }
 
+// ── Site filter facets (the "advanced" sheet on Map + Memorials) ─────────────
+// Complements the category chip-bar; covers facets the chips don't: broad
+// region (derived from latitude) and site type (the DB `location_type`).
+export const SITE_FILTER_GROUPS = [
+  {
+    key: 'region', title: 'אזור',
+    options: [
+      { value: 'north',  label: 'צפון' },
+      { value: 'center', label: 'מרכז' },
+      { value: 'south',  label: 'דרום' },
+    ],
+  },
+  {
+    key: 'type', title: 'סוג אתר',
+    options: [
+      { value: 'אנדרטה', label: 'אנדרטה' },
+      { value: 'תצפית',  label: 'תצפית'  },
+      { value: 'חניון',  label: 'חניון'  },
+    ],
+  },
+]
+
+const SITE_FILTERS_INIT = { region: 'all', type: 'all' }
+
+// Broad north/center/south bucket from latitude (sites have no region column).
+function deriveSiteRegion(lat) {
+  if (lat == null) return 'center'
+  if (lat >= 32.5) return 'north'
+  if (lat >= 31.5) return 'center'
+  return 'south'
+}
+
 // ── Achievement badges (logic lives with the data it evaluates) ──────────────
 export const BADGES = [
   { id: 'beginner', label: 'סייר מתחיל',   icon: '🧭', desc: 'השלמת מסלול אחד',          test: p => p.completedRouteIds.length >= 1 },
@@ -103,12 +135,15 @@ const EMPTY_PROGRESS = {
 }
 
 // ── Filtering helpers ─────────────────────────────────────────────────────────
-function applySiteFilters(sites, chips, query) {
+function applySiteFilters(sites, chips, query, filters = SITE_FILTERS_INIT) {
   const active = chips.find(c => c.active && c.id !== 'all')
   let result = sites
   if (active && CATEGORY[active.id]) {
     result = result.filter(s => s.category === CATEGORY[active.id])
   }
+  // Advanced facets from the FilterSheet (region derived from lat; type = location_type).
+  if (filters.region !== 'all') result = result.filter(s => deriveSiteRegion(s.coordinates?.lat) === filters.region)
+  if (filters.type   !== 'all') result = result.filter(s => s.location === filters.type)
   if (query.trim()) {
     const q = query.trim().toLowerCase()
     result = result.filter(s =>
@@ -145,6 +180,14 @@ function applyRouteFilters(list, filters, query) {
   return result
 }
 
+// Rejects if `p` doesn't settle within `ms`. A finally() can't clear the
+// loading flag on a promise that never resolves (e.g. a hung Supabase request),
+// so we force a rejection that the .catch()/.finally() can act on.
+const withTimeout = (p, ms, msg) => Promise.race([
+  p,
+  new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms)),
+])
+
 // ── Context ───────────────────────────────────────────────────────────────────
 const AppContext = createContext(null)
 
@@ -165,7 +208,7 @@ export function AppProvider({ children }) {
     if (authLoading) return                       // still resolving the session
     if (!user)        { setSites([]);  setSitesLoading(false);  return }
     setSitesLoading(true); setSitesError(null)
-    getMemorials()
+    withTimeout(getMemorials(), 12000, 'טעינת אתרי ההנצחה נתקעה. בדוק/י חיבור ונסה/י שוב.')
       .then(setSites)
       .catch(err => setSitesError(err.message ?? 'שגיאה בטעינת אתרי הנצחה'))
       .finally(() => setSitesLoading(false))
@@ -175,7 +218,7 @@ export function AppProvider({ children }) {
     if (authLoading) return
     if (!user)        { setRoutes([]); setRoutesLoading(false); return }
     setRoutesLoading(true); setRoutesError(null)
-    getRoutes()
+    withTimeout(getRoutes(), 12000, 'טעינת המסלולים נתקעה. בדוק/י חיבור ונסה/י שוב.')
       .then(setRoutes)
       .catch(err => setRoutesError(err.message ?? 'שגיאה בטעינת מסלולים'))
       .finally(() => setRoutesLoading(false))
@@ -234,6 +277,13 @@ export function AppProvider({ children }) {
     setRouteFilters(prev => ({ ...prev, [key]: prev[key] === value ? 'all' : value }))
   }, [])
   const resetRouteFilters = useCallback(() => setRouteFilters(ROUTE_FILTERS_INIT), [])
+
+  // ── Site filters (Map + Memorials advanced sheet) — same toggle semantics ──
+  const [siteFilters, setSiteFilters] = useState(SITE_FILTERS_INIT)
+  const setSiteFilter = useCallback((key, value) => {
+    setSiteFilters(prev => ({ ...prev, [key]: prev[key] === value ? 'all' : value }))
+  }, [])
+  const resetSiteFilters = useCallback(() => setSiteFilters(SITE_FILTERS_INIT), [])
 
   // ── Per-user progress (auth-backed) — saves, completions, contributions ──
   // (`user` is already destructured at the top of the provider; we just need
@@ -344,13 +394,13 @@ export function AppProvider({ children }) {
 
   // ── Derived: filtered lists ───────────────────────────────────────────────
   const filteredSites = useMemo(
-    () => applySiteFilters(sites, memChips, memQuery),
-    [sites, memChips, memQuery]
+    () => applySiteFilters(sites, memChips, memQuery, siteFilters),
+    [sites, memChips, memQuery, siteFilters]
   )
 
   const filteredMapSites = useMemo(
-    () => applySiteFilters(sites, mapChips, memQuery),
-    [sites, mapChips, memQuery]
+    () => applySiteFilters(sites, mapChips, memQuery, siteFilters),
+    [sites, mapChips, memQuery, siteFilters]
   )
 
   const filteredRoutes = useMemo(
@@ -378,6 +428,8 @@ export function AppProvider({ children }) {
       memChips,       selectMemChip,
       // route filters
       routeFilters,   setRouteFilter,   resetRouteFilters,
+      // site filters (advanced sheet on Map + Memorials)
+      siteFilters,    setSiteFilter,    resetSiteFilters,
       // derived
       filteredSites,
       filteredMapSites,

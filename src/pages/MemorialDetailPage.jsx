@@ -60,8 +60,9 @@ export default function MemorialDetailPage() {
   const paragraphs = memorial.fullDescription.split('\n\n').filter(Boolean);
 
   function handleNavigate() {
-    const { lat, lng } = memorial.coordinates;
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+    const { lat, lng } = memorial.coordinates || {};
+    if (lat == null || lng == null) return;
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank', 'noopener,noreferrer');
   }
 
   function handleShare() {

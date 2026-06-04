@@ -4,7 +4,7 @@ import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2 } from 'lucide-react'
-import { useApp } from '../contexts/AppContext'
+import { useApp, SITE_FILTER_GROUPS } from '../contexts/AppContext'
 import { useToast } from '../contexts/ToastContext'
 import FilterSheet from '../components/common/FilterSheet'
 
@@ -63,7 +63,10 @@ function userLocationIcon() {
 
 export default function MapPage() {
   const navigate = useNavigate()
-  const { sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery } = useApp()
+  const {
+    sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery,
+    siteFilters, setSiteFilter, resetSiteFilters,
+  } = useApp()
   const toast = useToast()
 
   const [selectedSite, setSelectedSite] = useState(null)
@@ -142,7 +145,10 @@ export default function MapPage() {
           />
         )}
 
-        <MarkerClusterGroup chunkedLoading>
+        {/* key flips once sites finish loading so react-leaflet-cluster reliably
+            absorbs the first 0→N marker population (otherwise pins only appear
+            after the first filter interaction). */}
+        <MarkerClusterGroup key={`mcg-${sites.length ? 'loaded' : 'empty'}`} chunkedLoading>
           {siteIcons
             .filter(({ site }) => filteredMapSites.some(fs => fs.id === site.id))
             .map(({ site, icon }) => (
@@ -252,8 +258,9 @@ export default function MapPage() {
                 </button>
                 <button
                   onClick={() => {
-                    const { lat, lng } = selectedSite.coordinates
-                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank')
+                    const { lat, lng } = selectedSite.coordinates || {}
+                    if (lat == null || lng == null) { toast.error('אין קואורדינטות לאתר זה'); return }
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank', 'noopener,noreferrer')
                     dismiss()
                   }}
                   className="flex items-center gap-1.5 bg-olive-700 text-white
@@ -300,7 +307,11 @@ export default function MapPage() {
       <FilterSheet
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
-        onApply={() => {}}
+        groups={SITE_FILTER_GROUPS}
+        values={siteFilters}
+        onChange={setSiteFilter}
+        onReset={resetSiteFilters}
+        title="סינון אתרים"
       />
     </div>
   )

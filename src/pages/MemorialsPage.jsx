@@ -6,14 +6,18 @@ import FilterChip from '../components/common/FilterChip'
 import FilterSheet from '../components/common/FilterSheet'
 import NearbyMemorialCard from '../components/memorials/NearbyMemorialCard'
 import StoryCard from '../components/memorials/StoryCard'
-import { useApp } from '../contexts/AppContext'
+import { useApp, SITE_FILTER_GROUPS } from '../contexts/AppContext'
 import { ListSkeleton, EmptyState, ErrorState } from '../components/ui'
 import { Flame } from 'lucide-react'
 
 export default function MemorialsPage() {
   const navigate = useNavigate()
-  const { filteredSites, sitesLoading, sitesError, memChips, selectMemChip, memQuery, setMemQuery } = useApp()
+  const {
+    filteredSites, sitesLoading, sitesError, memChips, selectMemChip, memQuery, setMemQuery,
+    siteFilters, setSiteFilter, resetSiteFilters,
+  } = useApp()
   const [filterOpen, setFilterOpen] = useState(false)
+  const activeSiteFilterCount = Object.values(siteFilters).filter(v => v !== 'all').length
 
   return (
     <div className="flex flex-col gap-4 pb-6" dir="rtl">
@@ -24,6 +28,7 @@ export default function MemorialsPage() {
           onChange={e => setMemQuery(e.target.value)}
           placeholder="חיפוש חלל, יחידה, או סיפור הנצחה..."
           onFilterClick={() => setFilterOpen(true)}
+          filterCount={activeSiteFilterCount}
         />
       </div>
 
@@ -84,7 +89,11 @@ export default function MemorialsPage() {
       <FilterSheet
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
-        onApply={() => {}}
+        groups={SITE_FILTER_GROUPS}
+        values={siteFilters}
+        onChange={setSiteFilter}
+        onReset={resetSiteFilters}
+        title="סינון אתרים"
       />
     </div>
   )

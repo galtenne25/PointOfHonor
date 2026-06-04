@@ -112,13 +112,21 @@ export function AuthProvider({ children }) {
       }
 
       // Register the auth listener AFTER initial state is settled.
-      const sub = supabase.auth.onAuthStateChange(async (event, next) => {
+      const sub = supabase.auth.onAuthStateChange((event, next) => {
         log('onAuthStateChange event:', event, { userId: next?.user?.id })
         if (cancelled) return
         setSession(next)
-        const p = next?.user ? await ensureProfile(next.user) : null
-        if (cancelled) return
-        setProfile(p)
+        // CRITICAL: never await Supabase calls directly inside this callback.
+        // supabase-js holds an auth lock for its duration; awaiting a query/auth
+        // call here deadlocks the client and every later query hangs forever
+        // (stuck skeletons, "שומר..." spinner). Defer with setTimeout(0) so the
+        // profile fetch runs OUTSIDE the lock.
+        setTimeout(async () => {
+          if (cancelled) return
+          const p = next?.user ? await ensureProfile(next.user) : null
+          if (cancelled) return
+          setProfile(p)
+        }, 0)
       })
       unsub = sub.data.subscription
     })().catch(err => logErr('unexpected error in auth bootstrap:', err))

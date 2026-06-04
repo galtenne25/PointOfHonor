@@ -96,21 +96,31 @@ export default function EditProfilePage() {
     setBusy(true)
     try {
       const initials = (form.full_name.trim().slice(0, 1) || '?').toUpperCase()
-      const { error } = await supabase
+      // UPSERT (not UPDATE): a missing profiles row must be CREATED here, not
+      // just updated (UPDATE would match 0 rows and silently no-op).
+      const save = supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id:         user.id,
           full_name:  form.full_name.trim(),
           initials,
           bio:        form.bio.trim() || null,
           avatar_url: form.avatar_url || null,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
+        }, { onConflict: 'id' })
+
+      // Supabase calls can hang (see AuthPage) — race a timeout so the button
+      // can never get stuck on "שומר..." indefinitely.
+      const { error } = await Promise.race([
+        save,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('השמירה לקחה יותר מדי זמן. בדוק/י חיבור ונסה/י שוב.')), 8000)),
+      ])
       if (error) throw error
 
-      await refreshProfile()
+      // Fire-and-forget: a slow profile re-fetch must not re-hang the UI.
+      refreshProfile()
       toast.success('הפרופיל נשמר בהצלחה')
-      // Return to wherever the user came from (or /profile by default)
       const dest = location.state?.from?.pathname || '/profile'
       navigate(dest, { replace: true })
     } catch (err) {

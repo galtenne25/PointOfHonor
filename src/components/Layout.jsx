@@ -5,25 +5,25 @@ import { useAuth } from '../contexts/AuthContext'
 
 // Paths reachable without an active Supabase session.
 const PUBLIC_PATHS = new Set(['/auth', '/onboarding'])
-// Paths reachable with a session but a profile row that's still missing.
-const PROFILE_EDIT_ALLOWED = new Set(['/profile/edit', '/auth', '/onboarding'])
 
 /**
- * AppAuthGate — strict auth gate placed inside Layout.
+ * AppAuthGate — auth gate placed inside Layout.
  *   1. While auth is loading: passes through (children render their own skeleton).
  *   2. No session  →  Navigate to /auth immediately.
- *   3. Session but no profile row →  Navigate to /profile/edit.
- *   4. Otherwise renders children.
+ *   3. Otherwise renders children.
+ *
+ * NOTE: we intentionally do NOT hard-redirect on a missing profile row. New
+ * users are guided to /profile/edit right after signup (AuthPage) and existing
+ * users get a soft banner on the profile page. A hard gate here trapped users
+ * whenever the profile row couldn't be created/fetched (DB/RLS/hang), bouncing
+ * every navigation back to the edit screen.
  */
 function AppAuthGate({ children }) {
-  const { user, loading, needsProfileCompletion } = useAuth()
+  const { user, loading } = useAuth()
   const { pathname } = useLocation()
   if (loading) return children
   if (!user && !PUBLIC_PATHS.has(pathname)) {
     return <Navigate to="/auth" replace state={{ from: { pathname } }} />
-  }
-  if (user && needsProfileCompletion && !PROFILE_EDIT_ALLOWED.has(pathname)) {
-    return <Navigate to="/profile/edit" replace state={{ from: { pathname } }} />
   }
   return children
 }
