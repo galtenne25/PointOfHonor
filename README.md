@@ -11,6 +11,10 @@
 ### 🔗 קישור לאפליקציה החיה
 **[https://memorial-map-murex.vercel.app/map](https://memorial-map-murex.vercel.app/map)**
 
+:משתמש דמו       
+EMAIL_ADDRESS - galtenne225@gmail.com
+PASSWORD - Tennec100
+
 ---
 
 ## סקירה כללית
