@@ -11,9 +11,6 @@
 ### 🔗 קישור לאפליקציה החיה
 **[https://memorial-map-murex.vercel.app/map](https://memorial-map-murex.vercel.app/map)**
 
-:משתמש דמו       
-EMAIL_ADDRESS - galtenne225@gmail.com
-PASSWORD - Tennec100
 
 ---
 
@@ -62,20 +59,20 @@ PASSWORD - Tennec100
 - 🧭 **ניווט במסלולי מורשת** — מסלולים מודרכים עם נקודות-ציון ומסך ניווט פעיל בשטח.
 
 ---
-
 ## טבלת שירותים חיצוניים ואינטגרציות
 
-| שירות | סוג | שימוש בפרויקט |
+| שירות / טכנולוגיה | סוג | שימוש בפרויקט ותפקיד ארכיטקטוני |
 | --- | --- | --- |
-| **Supabase** | Backend / Database / Auth | מסד נתונים PostgreSQL, אימות משתמשים (Email/Password), והרשאות גישה ברמת השורה (Row Level Security). |
-| **Leaflet + OpenStreetMap** | Maps SDK | רינדור המפה האינטראקטיבית, אריחי המפה ואשכולות הסמנים (`leaflet.markercluster`). |
-| **Vercel** | Deployment / Hosting | אירוח האפליקציה בסביבת ייצור, כולל הגדרות ניתוב ל-SPA. |
+| **Supabase** | Backend / Database / Auth | מסד נתונים PostgreSQL, אימות משתמשים (Email/Password), ומערכת הרשאות אבטחה ברמת השורה (Row Level Security). |
+| **Wikidata SPARQL API** | External API | אינטגרציה מורכבת לשאיבת נתוני אמת. המערכת מתממשקת ל-API של ויקינתונים כדי למשוך אתרי הנצחה בישראל, תיאורים וקואורדינטות בצורה אוטומטית (Data Pipeline). |
+| **Algorithmic Routing Engine** | Server-side Logic | מנוע חישוב (Node.js) המעבד את נתוני ה-API החיצוניים. משתמש באלגוריתם *Nearest Neighbor* ונוסחת *Haversine* לחשוב מרחקים ויצירת מסלולי מורשת אוטומטיים. |
+| **AI Synthetic Pipeline** | AI Data Generation | שימוש במודלי שפה חכמים (AI) ליצירת מנגנון Seeding המאכלס את מסד הנתונים בתוכן מורשת איכותי ועשיר ללא צורך בהזנה ידנית. |
+| **Leaflet + OpenStreetMap** | Maps SDK / API | רינדור המפה האינטראקטיבית, הטענת אריחי המפה, והצגת אשכולות סמנים מבוססי מיקום (`leaflet.markercluster`). |
+| **Vercel** | Deployment / Hosting | אירוח האפליקציה בסביבת ייצור (Production), כולל הגדרות ניתוב ל-SPA. |
 | **GitHub Actions** | CI/CD | הרצה אוטומטית של חבילת הבדיקות בכל `push` ו-`pull request` לענף `main`. |
 | **Vitest + Testing Library** | Testing | בדיקות יחידה ואינטגרציה לשירותים ולרכיבי ה-UI. |
 
-> **הערה:** האימות מבוסס Email/Password דרך Supabase Auth. ניתן להרחיב בקלות ל-OAuth (לרבות Google) באמצעות תשתית ה-Providers של Supabase.
-
----
+    ---
 
 ## מודל הנתונים (ERD)
 
@@ -120,13 +117,94 @@ npm run dev
 
 | | |
 | --- | --- |
-| **אימייל** | `[DEMO_EMAIL]` |
-| **סיסמה** | `[DEMO_PASSWORD]` |
+| **אימייל** | `[galtenne225@gmail.com]` |
+| **סיסמה** | `[Tennec100]` |
 
 ---
 
 ## מחסנית טכנולוגית (Tech Stack)
 
 `React 18` · `Vite` · `React Router v6` · `Tailwind CSS` · `Leaflet` · `Supabase` · `Vitest` · `PWA`
+
+
+---
+
+## Final Checklist for Submission
+
+### Product Summary
+- The system is a location-based memorial platform allowing users to create, explore, and interact with memorial sites on an interactive map.
+- Focus: preserving memory through structured digital storytelling and geospatial context.
+
+---
+
+## Architecture Overview
+
+Frontend (React)
+↓
+Authentication (Supabase Auth)
+↓
+Database Layer (Supabase Postgres)
+↓
+Geospatial Layer (Leaflet + OpenStreetMap)
+↓
+User Interactions (memorial creation, viewing, engagement)
+
+---
+
+## Key User Flow
+
+1. User registers or logs in
+2. User accesses interactive map
+3. User creates or selects memorial location
+4. User views memorial details (story, media, metadata)
+5. User interacts (e.g., tribute / memory action)
+6. Data is saved in Supabase and reflected on map
+
+---
+
+## External Services & Integrations
+
+| Service | Type | Purpose |
+|----------|------|---------|
+| Supabase Auth | Authentication | User login and session management |
+| Supabase Postgres | Database | Storage of memorials, users, and interactions |
+| Leaflet | Mapping Library | Interactive map rendering and geospatial UI |
+| OpenStreetMap | Map Tiles API | Base map data provider |
+| Vercel | Hosting | Production deployment |
+
+---
+
+## Database Model (ERD Reference)
+
+The database includes core entities such as:
+- Users
+- Memorials
+- Locations (lat, lng)
+- User interactions (tributes / actions)
+
+Relationships:
+- User → Memorials (1 to many)
+- Memorial → Location (1 to 1)
+- Memorial → Interactions (1 to many)
+
+(See full ERD diagram in `/docs/ERD.png` or Supabase Schema Visualizer)
+
+---
+
+## Deployment
+
+- The application is deployed on Vercel
+- All core flows are fully functional in production
+- No local setup required for evaluation
+
+---
+
+## Notes on Product Design
+
+- The system is designed for a single clear core use case: digital memorial creation and exploration
+- Emphasis on simplicity, emotional clarity, and map-based interaction
+- Mobile responsive and RTL compatible
+
+---
 
 </div>
