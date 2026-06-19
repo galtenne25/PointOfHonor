@@ -20,7 +20,7 @@ export default function NearbyMemorialCard({ memorial, onClick }) {
         <p className="text-xs text-slate-500 text-right mt-0.5">{memorial.distance} ממך</p>
         <p className="text-xs text-slate-400 text-right">{memorial.location}</p>
         <button
-          onClick={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onClick?.(e) }}
           className="mt-2 w-full flex items-center justify-center gap-1.5
                      bg-olive-700 text-white text-xs font-semibold py-1.5 rounded-lg
                      hover:bg-olive-800 active:scale-95 transition-all duration-150"

@@ -27,7 +27,7 @@ export default function StoryCard({ memorial, onClick }) {
 
         <div className="flex gap-2 mt-2.5">
           <button
-            onClick={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onClick?.(e) }}
             className="flex items-center gap-1.5 bg-olive-700 text-white text-xs font-semibold
                        px-3 py-1.5 rounded-lg hover:bg-olive-800 active:scale-95 transition-all duration-150"
           >

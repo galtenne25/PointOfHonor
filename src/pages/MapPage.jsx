@@ -3,9 +3,10 @@ import { MapContainer, TileLayer, Marker, useMapEvent, useMap } from 'react-leaf
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
-import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2 } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2, MapPinOff, SearchX, RotateCw } from 'lucide-react'
 import { useApp, SITE_FILTER_GROUPS } from '../contexts/AppContext'
 import { useToast } from '../contexts/ToastContext'
+import { EmptyState, ErrorState } from '../components/ui'
 import FilterSheet from '../components/common/FilterSheet'
 
 const ISRAEL_CENTER = [31.5, 35.0]
@@ -64,7 +65,8 @@ function userLocationIcon() {
 export default function MapPage() {
   const navigate = useNavigate()
   const {
-    sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery,
+    sites, filteredMapSites, sitesLoading, sitesError, reloadSites,
+    memQuery, setMemQuery,
     siteFilters, setSiteFilter, resetSiteFilters,
   } = useApp()
   const toast = useToast()
@@ -145,10 +147,18 @@ export default function MapPage() {
           />
         )}
 
-        {/* key flips once sites finish loading so react-leaflet-cluster reliably
-            absorbs the first 0→N marker population (otherwise pins only appear
-            after the first filter interaction). */}
-        <MarkerClusterGroup key={`mcg-${sites.length ? 'loaded' : 'empty'}`} chunkedLoading>
+        {/* react-leaflet-cluster does NOT reliably reconcile its children when the
+            marker array changes after mount — the classic "pins only show after the
+            first filter interaction" bug. Keying the group on the rendered marker
+            COUNT forces a clean remount whenever the data changes, including the
+            initial 0→N population on load, so every marker appears immediately. */}
+        <MarkerClusterGroup
+          key={`mcg-${sitesLoading ? 'loading' : filteredMapSites.length}`}
+          chunkedLoading
+          maxClusterRadius={50}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+        >
           {siteIcons
             .filter(({ site }) => filteredMapSites.some(fs => fs.id === site.id))
             .map(({ site, icon }) => (
@@ -172,6 +182,65 @@ export default function MapPage() {
         </div>
       )}
 
+      {/* ── Error state overlay (load failed) ── */}
+      {!sitesLoading && sitesError && (
+        <div className="absolute inset-0 z-[1001] flex items-center justify-center px-6 pointer-events-none">
+          <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <ErrorState
+              title="לא ניתן לטעון את אתרי ההנצחה"
+              message={sitesError}
+              action={
+                <button
+                  onClick={reloadSites}
+                  className="flex items-center gap-1.5 bg-olive-700 text-white text-sm font-semibold
+                             px-4 py-2 rounded-lg hover:bg-olive-800 active:scale-95 transition-all duration-150"
+                >
+                  <RotateCw size={14} strokeWidth={2.5} />
+                  <span>נסה שוב</span>
+                </button>
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty state overlay (no sites / no matches) ── */}
+      {!sitesLoading && !sitesError && filteredMapSites.length === 0 && (
+        <div className="absolute inset-0 z-[1001] flex items-center justify-center px-6 pointer-events-none">
+          <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <EmptyState
+              icon={sites.length === 0 ? MapPinOff : SearchX}
+              title={sites.length === 0 ? 'אין עדיין אתרי הנצחה במפה' : 'לא נמצאו אתרים תואמים'}
+              message={
+                sites.length === 0
+                  ? 'עדיין לא נוספו אתרי הנצחה. היה/י הראשון/ה לשתף נקודה ולשמר את הזיכרון.'
+                  : 'נסה/י לשנות את מילות החיפוש או לאפס את הסינון.'
+              }
+              action={
+                sites.length === 0 ? (
+                  <button
+                    onClick={() => navigate('/add-point')}
+                    className="flex items-center gap-1.5 bg-olive-700 text-white text-sm font-semibold
+                               px-4 py-2 rounded-lg hover:bg-olive-800 active:scale-95 transition-all duration-150"
+                  >
+                    <Plus size={14} strokeWidth={2.5} />
+                    <span>הוסף נקודה</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setMemQuery(''); resetSiteFilters() }}
+                    className="flex items-center gap-1.5 border border-slate-300 text-slate-600 text-sm font-medium
+                               px-4 py-2 rounded-lg hover:bg-slate-50 active:scale-95 transition-all duration-150"
+                  >
+                    איפוס סינון
+                  </button>
+                )
+              }
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Search bar overlay ── */}
       <div className="absolute top-3 right-3 left-3 z-[1000]">
         <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 shadow-md">
@@ -192,27 +261,6 @@ export default function MapPage() {
             <SlidersHorizontal size={16} className="text-olive-700" />
           </button>
         </div>
-      </div>
-
-      {/* ── Category chips ── */}
-      <div className="absolute top-[3.75rem] right-0 left-0 z-[1000]
-                      flex flex-row-reverse gap-2 px-3 overflow-x-auto scrollbar-hide">
-        {mapChips.map(chip => (
-          <button
-            key={chip.id}
-            onClick={() => selectMapChip(chip.id)}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
-              whitespace-nowrap shadow-sm transition-colors
-              ${chip.active
-                ? 'bg-olive-700 text-white'
-                : 'bg-white text-slate-700 border border-slate-200'}
-            `}
-          >
-            {chip.emoji && <span className="text-xs">{chip.emoji}</span>}
-            <span>{chip.label}</span>
-          </button>
-        ))}
       </div>
 
       {/* ── Site detail popup card ── */}

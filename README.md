@@ -1,132 +1,254 @@
-<div dir="rtl">
+# 🕯️ Nekudat Tzion (נקודת ציון) — Memorial Map
 
-# 🕯️ נקודת ציון — Memorial Map
+> A location-based social platform for commemorating the fallen of Israel's wars and victims of hostile acts — turning remembrance from a static, one-way experience into a living, community-driven one.
 
-> פלטפורמה חברתית מבוססת-מיקום להנצחת חללי מערכות ישראל ונפגעי פעולות האיבה.
+**🔗 Live app:** **[https://memorial-map-murex.vercel.app/map](https://memorial-map-murex.vercel.app/map)**
 
-![צילום מסך של האפליקציה — נקודת ציון](./Photos/APPimage.png)
+> 📄 A Hebrew version of this document is available in **[README.he.md](./README.he.md)**.
 
-> *תצוגת המפה האינטראקטיבית של האפליקציה, המציגה את אתרי ההנצחה ומסלולי המורשת על-גבי מפה חיה.*
+![Application screenshot — Nekudat Tzion](./Photos/APPimage.png)
 
-### 🔗 קישור לאפליקציה החיה
-**[https://memorial-map-murex.vercel.app/map](https://memorial-map-murex.vercel.app/map)**
-
-:משתמש דמו       
-EMAIL_ADDRESS - galtenne225@gmail.com
-PASSWORD - Tennec100
+*The interactive map view, showing memorial sites and heritage routes on a live map.*
 
 ---
 
-## סקירה כללית
-
-**נקודת ציון** היא פלטפורמה חברתית אינטראקטיבית מבוססת-מיקום, שנועדה לשמר את מורשתם וסיפוריהם של חללי מערכות ישראל ונפגעי פעולות האיבה. האפליקציה ממירה את ההנצחה מחוויה סטטית וחד-כיוונית לחוויה חיה, קהילתית ומשתפת — הקושרת בין סיפור אנושי לבין נקודה פיזית על המפה.
+## Table of Contents
+1. [Overview](#overview)
+2. [The Problem](#the-problem)
+3. [Target Audience](#target-audience)
+4. [Competitors & Differentiation](#competitors--differentiation)
+5. [Key Features](#key-features)
+6. [Tech Stack](#tech-stack)
+7. [Architecture](#architecture)
+8. [Data Model (ERD)](#data-model-erd)
+9. [External Services & Integrations](#external-services--integrations)
+10. [Security](#security)
+11. [Local Development](#local-development)
+12. [Testing](#testing)
+13. [Deployment](#deployment)
+14. [Project Structure](#project-structure)
 
 ---
 
-## הבעיה
+## Overview
 
-עם ישראל חווה אירועים טרגיים ומכוננים רבים כתוצאה ממלחמות ופעולות איבה, ומשקיע משאבים ועתים רבים בהנצחת הנופלים. אולם למרות זאת, **לא קיימת בישראל פלטפורמה אחת מאוחדת** לכך. אין רשת חברתית ייעודית שבה ניתן להנציח, לשתף סיפורים, לתת ביטוי לכאב, ולעודד אחרים לבקר באתרי ההנצחה ולחלוק כבוד ליקיריהם. המידע מפוזר, אובד וחסר הקשר גאוגרפי.
+**Nekudat Tzion** ("a point of reference / a landmark") is an interactive, location-based social platform built to preserve the legacy and stories of Israel's fallen soldiers and the victims of hostile acts. Instead of a static list, the app ties each human story to a physical point on a map, and adds community layers — lighting a virtual candle, a community activity feed, and user-contributed sites and stories — so that remembrance becomes active, shared, and alive.
+
+The application is a **mobile-first, fully RTL (Hebrew) Progressive Web App**.
 
 ---
 
-## קהל היעד
+## The Problem
 
-| קהל | הצורך |
+Israeli society experiences many tragic and formative events as a result of wars and hostile acts, and invests significant resources in commemorating the fallen. Despite this, **there is no single unified platform** for it. There is no dedicated social network where people can commemorate, share stories, give voice to grief, and encourage others to visit memorial sites and pay their respects. The information is scattered, gets lost, and lacks geographic context.
+
+---
+
+## Target Audience
+
+| Audience | Need |
 | --- | --- |
-| **משפחות שכולות** | שימור הסיפור האישי של יקיריהן והנגשתו לציבור הרחב. |
-| **מטיילים ומטפסים** | התחברות למורשת ולסיפורים של המקומות שבהם הם מבקרים. |
-| **הציבור הרחב ומערכת החינוך** | דרך משמעותית, חווייתית ופעילה להתחבר לזיכרון הלאומי. |
+| **Bereaved families** | Preserving the personal story of their loved ones and making it accessible to the public. |
+| **Hikers & travelers** | Connecting to the heritage and stories of the places they visit. |
+| **General public & education system** | A meaningful, experiential, and active way to connect with national memory. |
 
 ---
 
-## מתחרים ובידול
+## Competitors & Differentiation
 
-| המתחֵר | החיסרון |
+| Competitor | Weakness |
 | --- | --- |
-| **אתר "יזכור" הרשמי** | סטטי, מיושן, וחסר ממדים קהילתיים ומבוססי-מיקום. |
-| **קבוצות פייסבוק / וואטסאפ** | המידע נקבר, אינו מאורגן, ואינו קשור לניווט פיזי בשטח. |
-| **גיליונות Excel ומסמכים** | מבוזרים, לא נגישים ולא חווייתיים. |
+| **The official "Yizkor" site** | Static, dated, and lacks community and location-based dimensions. |
+| **Facebook / WhatsApp groups** | Information gets buried, is unorganized, and is not tied to physical navigation. |
+| **Excel sheets & documents** | Fragmented, inaccessible, and non-experiential. |
 
-### 🎯 הבידול שלנו
-מפה אינטראקטיבית מבוססת-מיקום, המשולבת עם רכיבים חברתיים — **הדלקת נר וירטואלי, פיד קהילתי וסיפורים שנכתבים על-ידי המשתמשים** — ההופכים את ההנצחה מחוויה פסיבית לחוויה פעילה, חיה ומשותפת.
-
----
-
-## הפיצ'רים המרכזיים
-
-- 🗺️ **מפה אינטראקטיבית** — תצוגת אתרי הנצחה ומסלולי מורשת על-גבי מפה חיה, עם אשכולות סמנים (clustering), חיפוש וסינון לפי קטגוריות (חרבות ברזל, מלחמת ששת הימים, נפגעי איבה).
-- ➕ **הוספת תוכן על-ידי המשתמשים** — הוספת נקודות הנצחה ומסלולים חדשים באמצעות נעיצה ישירה על המפה, כולל סיפורים ותמונות.
-- 🕯️ **הדלקת נר וירטואלי** — מונה נרות חי לכל אתר הנצחה, המתעדכן בזמן אמת ומאפשר מחווה אישית.
-- 👥 **פיד קהילתי** — הזנת פעילות חברתית של הקהילה (נרות שהודלקו, נקודות שנוספו, מסלולים שהושלמו).
-- 🔐 **מערכת משתמשים והרשאות** — הרשמה והתחברות, פרופיל אישי, ניהול התרומות של המשתמש, ופאנל ניהול (Admin) לבקרת תוכן.
-- 🧭 **ניווט במסלולי מורשת** — מסלולים מודרכים עם נקודות-ציון ומסך ניווט פעיל בשטח.
+### 🎯 Our differentiation
+An interactive, location-based map combined with social components — **lighting a virtual candle, a community feed, and user-written stories** — that transform remembrance from a passive experience into an active, living, and shared one.
 
 ---
 
-## טבלת שירותים חיצוניים ואינטגרציות
+## Key Features
 
-| שירות | סוג | שימוש בפרויקט |
+- 🗺️ **Interactive map** — memorial sites and heritage routes on a live map, with marker clustering, search, and an advanced filter sheet (by region and site type).
+- ➕ **User-contributed content** — add new memorial points by pinning directly on the map, including stories and image uploads. Submissions are created as `pending` and surface after moderation.
+- 🕯️ **Light a virtual candle** — a live, real-time candle counter per site (synced across users via Supabase Realtime).
+- 👥 **Community feed** — a feed of community activity (candles lit, points added, routes completed).
+- 🔐 **Auth & roles** — sign up / sign in, personal profile, "my submissions", and an Admin panel for content moderation.
+- 🧭 **Heritage route navigation** — guided routes with waypoints and an active in-field navigation screen.
+- 📱 **Production-ready UX** — loading skeletons, empty states, error states, a global error boundary, and an onboarding flow.
+
+---
+
+## Tech Stack
+
+`React 18` · `Vite 5` · `React Router v6` · `Tailwind CSS 3` · `Leaflet` + `react-leaflet` + `react-leaflet-cluster` · `lucide-react` · `Supabase (PostgreSQL / Auth / Realtime / Storage)` · `Vitest` + `Testing Library` · `vite-plugin-pwa` · deployed on `Vercel` with CI via `GitHub Actions`.
+
+---
+
+## Architecture
+
+**Frontend (React + Vite)** — a component-driven SPA. Global state lives in React Contexts:
+- `AuthContext` — Supabase auth session + profile hydration (`isAdmin`, display name).
+- `AppContext` — remote data (sites, routes), client-side filtering, candle counts + realtime sync, and per-user progress.
+- `ToastContext` / `ConfirmContext` — app-wide toasts and confirm dialogs.
+
+```
+Frontend (React SPA)
+        │
+        ▼
+Auth (Supabase Auth)  ──►  Profile hydration / RLS-gated reads
+        │
+        ▼
+Database Layer (Supabase Postgres + RLS)
+        │
+        ▼
+Geospatial Layer (Leaflet + OpenStreetMap tiles, marker clustering)
+        │
+        ▼
+User interactions (create site, light candle, complete route)
+```
+
+**Backend (Supabase)** — a managed PostgreSQL database with Row Level Security, Supabase Auth (email/password), Realtime channels (live candle counts), and Storage (uploaded site images). All data access from the client goes through the auto-generated PostgREST API using the **public publishable (anon) key**, with RLS enforcing authorization.
+
+**Data pipeline (offline tooling, `/scripts`)** — the dataset is generated by a self-contained synthetic seeding engine that composes authentic Hebrew prose (regions, wars, units, archetypes), and an algorithmic routing builder that uses the *Haversine* formula + a *Nearest-Neighbor* heuristic to generate heritage routes from site coordinates. These run offline at seed time, not in the client.
+
+---
+
+## Data Model (ERD)
+
+The database is organized around memorial sites, the heritage routes that connect them, and the community/user layer.
+
+![Database ERD](./Photos/ERD.png)
+
+**Core tables**
+
+| Table | Purpose | Key relations |
 | --- | --- | --- |
-| **Supabase** | Backend / Database / Auth | מסד נתונים PostgreSQL, אימות משתמשים (Email/Password), והרשאות גישה ברמת השורה (Row Level Security). |
-| **Leaflet + OpenStreetMap** | Maps SDK | רינדור המפה האינטראקטיבית, אריחי המפה ואשכולות הסמנים (`leaflet.markercluster`). |
-| **Vercel** | Deployment / Hosting | אירוח האפליקציה בסביבת ייצור, כולל הגדרות ניתוב ל-SPA. |
-| **GitHub Actions** | CI/CD | הרצה אוטומטית של חבילת הבדיקות בכל `push` ו-`pull request` לענף `main`. |
-| **Vitest + Testing Library** | Testing | בדיקות יחידה ואינטגרציה לשירותים ולרכיבי ה-UI. |
+| `memorial_sites` | A commemorated location (name, dates, description, coordinates, `category`, `location_type`, `city`, `unit_name`, cover image). | 1‑to‑many → `site_galleries`; referenced by `community_activities`. |
+| `routes` | A heritage route (title, length, region, type, metadata). | 1‑to‑many → `route_waypoints`. |
+| `route_waypoints` | Ordered stops along a route. | many‑to‑1 → `routes`. |
+| `site_galleries` | Additional images for a site. | many‑to‑1 → `memorial_sites`. |
+| `profiles` | Public user profile (FK to `auth.users.id`), incl. `full_name`, `is_admin`. | 1‑to‑1 with `auth.users`; 1‑to‑many → `community_activities`. |
+| `community_activities` | Activity feed entries (candles lit, sites added, routes completed). | many‑to‑1 → `profiles`, `memorial_sites`. |
 
-> **הערה:** האימות מבוסס Email/Password דרך Supabase Auth. ניתן להרחיב בקלות ל-OAuth (לרבות Google) באמצעות תשתית ה-Providers של Supabase.
+**Relationships**
+- `auth.users` → `profiles` (1‑to‑1)
+- `profiles` → `memorial_sites` (1‑to‑many, contributions)
+- `memorial_sites` → `site_galleries` (1‑to‑many)
+- `routes` → `route_waypoints` (1‑to‑many)
+- `profiles` / `memorial_sites` → `community_activities` (1‑to‑many)
+
+### How to export the ERD from Supabase
+There are two supported ways to produce the diagram:
+
+1. **Supabase Schema Visualizer (recommended):**
+   1. Open your project at **app.supabase.com**.
+   2. Go to **Database → Schemas** (or **Table Editor**).
+   3. Open the **Schema Visualizer** tab — it renders all tables, columns, and foreign-key relationships automatically.
+   4. Use the export/download control (or take a high-resolution screenshot) and save it as `Photos/ERD.png`.
+
+2. **From the SQL Editor (auto-layout via the visualizer):** run a query against `information_schema` / `pg_catalog` to confirm relationships, then use the visualizer above to render them. (The committed `Photos/ERD.png` was produced this way.)
+
+> RLS policies and the helper RPCs are defined in [`scripts/schema_full_app.sql`](./scripts/schema_full_app.sql).
 
 ---
 
-## מודל הנתונים (ERD)
+## External Services & Integrations
 
-תרשים הישויות והקשרים (Entity-Relationship Diagram) של מסד הנתונים, המתאר את הטבלאות המרכזיות של הפרויקט (משתמשים, אתרי הנצחה, מסלולים, נרות ופעילות קהילתית) ואת הקשרים ביניהן.
+| Service | Type | Role in the project |
+| --- | --- | --- |
+| **Supabase** | Backend / DB / Auth / Realtime / Storage | PostgreSQL database, email/password auth, Row Level Security, live candle counts (Realtime), and image storage. |
+| **Leaflet + OpenStreetMap** | Maps SDK / Tiles API | Interactive map rendering, OSM tiles, and location-based marker clustering (`leaflet.markercluster`). |
+| **Google Maps** | External navigation (deep link) | Turn-by-turn navigation is launched via a Google Maps Directions deep link from a site's detail page. |
+| **Browser Geolocation API** | Device API | "Locate me" — centers the map on the user's current position. |
+| **Vercel** | Deployment / Hosting | Production hosting with SPA routing rewrites (`vercel.json`). |
+| **GitHub Actions** | CI/CD | Runs the Vitest suite automatically on every push and PR to `main`. |
 
-![תרשים ERD של מסד הנתונים](./Photos/ERD.png)
+> **Note on auth:** authentication uses Supabase Auth (email/password) and can be extended to OAuth (e.g. Google) via Supabase's Providers infrastructure.
 
 ---
 
-## הוראות הרצה מקומית
+## Security
+
+- **No secrets in client code.** The browser bundle only ever reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The publishable (anon) key is *designed* to be public — it is meaningless without the Row Level Security policies that gate every read/write.
+- **The service-role key is never bundled.** `SUPABASE_SERVICE_ROLE_KEY` is **not** `VITE_`-prefixed, so Vite never exposes it to the client; it is used only by offline Node seeding scripts.
+- **`.env` is git-ignored and was never committed** to version control (verified against the full git history).
+- **Row Level Security** is enforced on the database; policies (and helper RPCs) live in [`scripts/schema_full_app.sql`](./scripts/schema_full_app.sql). Anonymous reads are intentionally disabled — the app waits for an authenticated session before querying.
+- **Route protection** on the client via `RequireAuth` / `RequireAdmin` guards.
+
+---
+
+## Local Development
 
 ```bash
-# 1. שכפול המאגר
+# 1. Clone
 git clone <repository-url>
 cd MyProject
 
-# 2. התקנת התלויות
+# 2. Install dependencies
 npm install
 
-# 3. הגדרת משתני הסביבה
-# יש ליצור קובץ .env בתיקיית השורש עם המפתחות הבאים:
+# 3. Configure environment variables
+# Create a .env file in the project root:
 #   VITE_SUPABASE_URL=<your-supabase-url>
 #   VITE_SUPABASE_PUBLISHABLE_KEY=<your-supabase-anon-key>
+#   VITE_ADMIN_EMAIL=<email-to-treat-as-admin>   # optional
 
-# 4. הרצת סביבת הפיתוח
+# 4. Run the dev server
 npm run dev
 ```
 
-האפליקציה תהיה זמינה בכתובת `http://localhost:5173`.
+The app will be available at `http://localhost:5173`.
 
-| פקודה | תיאור |
+| Command | Description |
 | --- | --- |
-| `npm run dev` | הרצת שרת הפיתוח (Vite). |
-| `npm run build` | בניית גרסת ייצור. |
-| `npm test` | הרצת חבילת הבדיקות (Vitest). |
+| `npm run dev` | Start the Vite dev server. |
+| `npm run build` | Build the production bundle. |
+| `npm run preview` | Preview the production build locally. |
+| `npm test` | Run the Vitest test suite. |
 
----
-
-## משתמש דמו
-
-לבדיקת האפליקציה ללא צורך בהרשמה, ניתן להתחבר באמצעות פרטי הדמו הבאים:
+### Demo user
+To explore the app without registering:
 
 | | |
 | --- | --- |
-| **אימייל** | `[DEMO_EMAIL]` |
-| **סיסמה** | `[DEMO_PASSWORD]` |
+| **Email** | `galtenne225@gmail.com` |
+| **Password** | `Tennec100` |
 
 ---
 
-## מחסנית טכנולוגית (Tech Stack)
+## Testing
 
-`React 18` · `Vite` · `React Router v6` · `Tailwind CSS` · `Leaflet` · `Supabase` · `Vitest` · `PWA`
+Unit and integration tests run on **Vitest + Testing Library** (`tests/`), covering auth flows, confirm dialogs, service-layer CRUD, and storage. They execute automatically in CI on every push/PR to `main` via GitHub Actions.
 
-</div>
+```bash
+npm test
+```
+
+---
+
+## Deployment
+
+- Hosted on **Vercel** with SPA rewrites configured in [`vercel.json`](./vercel.json) so client-side routes resolve correctly on hard refresh.
+- The production console is kept clean (debug logging is disabled in production).
+- A global **error boundary** ([`src/components/ErrorBoundary.jsx`](./src/components/ErrorBoundary.jsx)) prevents any component crash from producing a blank screen.
+
+---
+
+## Project Structure
+
+```
+src/
+├── components/       # UI primitives (ui/), common widgets, ErrorBoundary, route guards
+├── contexts/         # AuthContext, AppContext, ToastContext, ConfirmContext
+├── hooks/            # useMemorial, useRoute, useChips, useActiveNavigation
+├── pages/            # Map, Memorials, Routes, Profile, Admin, Auth, AddPoint, ...
+├── services/         # Supabase data access (memorials, routes, community, saved, ...)
+└── utils/            # supabase client
+scripts/              # offline seeding + schema SQL (data pipeline)
+tests/                # Vitest + Testing Library
+```
+
+---
+
+*Built as a final academic project — a React + Supabase + Leaflet Progressive Web App.*

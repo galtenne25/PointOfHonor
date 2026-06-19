@@ -117,9 +117,6 @@ export default function ProfilePage() {
   const [activeTab,  setActiveTab ] = useState('saved')
   const [statsSheet, setStatsSheet] = useState(null)
 
-  // Diagnostic — verify auth + profile arrive correctly. Remove once stable.
-  console.log('[Profile] render', { authLoading, hasUser: !!user, userId: user?.id, hasProfile: !!profile, routesLoading, savedCount: savedRoutes?.length })
-
   // ── Auth gates (early returns AFTER all hooks above) ─────────────────────
   if (authLoading)  return <ProfileLoading />
   if (!user)        return <SignedOutGate onSignIn={() => navigate('/auth')} />
