@@ -66,7 +66,7 @@ export default function MapPage() {
   const navigate = useNavigate()
   const {
     sites, filteredMapSites, sitesLoading, sitesError, reloadSites,
-    mapChips, selectMapChip, memQuery, setMemQuery,
+    memQuery, setMemQuery,
     siteFilters, setSiteFilter, resetSiteFilters,
   } = useApp()
   const toast = useToast()
@@ -147,10 +147,18 @@ export default function MapPage() {
           />
         )}
 
-        {/* key flips once sites finish loading so react-leaflet-cluster reliably
-            absorbs the first 0→N marker population (otherwise pins only appear
-            after the first filter interaction). */}
-        <MarkerClusterGroup key={`mcg-${sites.length ? 'loaded' : 'empty'}`} chunkedLoading>
+        {/* react-leaflet-cluster does NOT reliably reconcile its children when the
+            marker array changes after mount — the classic "pins only show after the
+            first filter interaction" bug. Keying the group on the rendered marker
+            COUNT forces a clean remount whenever the data changes, including the
+            initial 0→N population on load, so every marker appears immediately. */}
+        <MarkerClusterGroup
+          key={`mcg-${sitesLoading ? 'loading' : filteredMapSites.length}`}
+          chunkedLoading
+          maxClusterRadius={50}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+        >
           {siteIcons
             .filter(({ site }) => filteredMapSites.some(fs => fs.id === site.id))
             .map(({ site, icon }) => (
@@ -220,7 +228,7 @@ export default function MapPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => { setMemQuery(''); resetSiteFilters(); selectMapChip('all') }}
+                    onClick={() => { setMemQuery(''); resetSiteFilters() }}
                     className="flex items-center gap-1.5 border border-slate-300 text-slate-600 text-sm font-medium
                                px-4 py-2 rounded-lg hover:bg-slate-50 active:scale-95 transition-all duration-150"
                   >
@@ -253,27 +261,6 @@ export default function MapPage() {
             <SlidersHorizontal size={16} className="text-olive-700" />
           </button>
         </div>
-      </div>
-
-      {/* ── Category chips ── */}
-      <div className="absolute top-[3.75rem] right-0 left-0 z-[1000]
-                      flex flex-row-reverse gap-2 px-3 overflow-x-auto scrollbar-hide">
-        {mapChips.map(chip => (
-          <button
-            key={chip.id}
-            onClick={() => selectMapChip(chip.id)}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
-              whitespace-nowrap shadow-sm transition-colors
-              ${chip.active
-                ? 'bg-olive-700 text-white'
-                : 'bg-white text-slate-700 border border-slate-200'}
-            `}
-          >
-            {chip.emoji && <span className="text-xs">{chip.emoji}</span>}
-            <span>{chip.label}</span>
-          </button>
-        ))}
       </div>
 
       {/* ── Site detail popup card ── */}

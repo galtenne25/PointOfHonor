@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
 
-// Flip to false once you've verified auth is working. Logs are namespaced
-// `[Auth]` so you can filter them in the browser devtools console.
-const DEBUG_AUTH = true
+// Off in production to keep the browser console clean (zero console noise).
+// Flip to true locally to debug auth; logs are namespaced `[Auth]`.
+const DEBUG_AUTH = false
 const log = (...a) => DEBUG_AUTH && console.log('[Auth]', ...a)
 const logErr = (...a) => DEBUG_AUTH && console.error('[Auth]', ...a)
 
