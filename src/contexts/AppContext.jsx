@@ -204,7 +204,9 @@ export function AppProvider({ children }) {
   const [sitesError,    setSitesError   ] = useState(null)
   const [routesError,   setRoutesError  ] = useState(null)
 
-  useEffect(() => {
+  // Extracted into a callback so the Map page's error overlay can offer a
+  // "retry" button that re-triggers the exact same load.
+  const reloadSites = useCallback(() => {
     if (authLoading) return                       // still resolving the session
     if (!user)        { setSites([]);  setSitesLoading(false);  return }
     setSitesLoading(true); setSitesError(null)
@@ -213,6 +215,8 @@ export function AppProvider({ children }) {
       .catch(err => setSitesError(err.message ?? 'שגיאה בטעינת אתרי הנצחה'))
       .finally(() => setSitesLoading(false))
   }, [authLoading, user?.id])
+
+  useEffect(() => { reloadSites() }, [reloadSites])
 
   useEffect(() => {
     if (authLoading) return
@@ -420,6 +424,7 @@ export function AppProvider({ children }) {
       sites,          routes,
       sitesLoading,   routesLoading,
       sitesError,     routesError,
+      reloadSites,
       // search
       memQuery,       setMemQuery,
       routesQuery,    setRoutesQuery,

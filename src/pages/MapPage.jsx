@@ -3,9 +3,10 @@ import { MapContainer, TileLayer, Marker, useMapEvent, useMap } from 'react-leaf
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
-import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2 } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, Navigation2, X, LocateFixed, Loader2, MapPinOff, SearchX, RotateCw } from 'lucide-react'
 import { useApp, SITE_FILTER_GROUPS } from '../contexts/AppContext'
 import { useToast } from '../contexts/ToastContext'
+import { EmptyState, ErrorState } from '../components/ui'
 import FilterSheet from '../components/common/FilterSheet'
 
 const ISRAEL_CENTER = [31.5, 35.0]
@@ -64,7 +65,8 @@ function userLocationIcon() {
 export default function MapPage() {
   const navigate = useNavigate()
   const {
-    sites, filteredMapSites, sitesLoading, mapChips, selectMapChip, memQuery, setMemQuery,
+    sites, filteredMapSites, sitesLoading, sitesError, reloadSites,
+    mapChips, selectMapChip, memQuery, setMemQuery,
     siteFilters, setSiteFilter, resetSiteFilters,
   } = useApp()
   const toast = useToast()
@@ -169,6 +171,65 @@ export default function MapPage() {
                         flex items-center gap-2 shadow-md">
           <Loader2 size={14} className="animate-spin text-olive-700" />
           <span className="text-xs font-medium text-slate-600">טוען אתרים...</span>
+        </div>
+      )}
+
+      {/* ── Error state overlay (load failed) ── */}
+      {!sitesLoading && sitesError && (
+        <div className="absolute inset-0 z-[1001] flex items-center justify-center px-6 pointer-events-none">
+          <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <ErrorState
+              title="לא ניתן לטעון את אתרי ההנצחה"
+              message={sitesError}
+              action={
+                <button
+                  onClick={reloadSites}
+                  className="flex items-center gap-1.5 bg-olive-700 text-white text-sm font-semibold
+                             px-4 py-2 rounded-lg hover:bg-olive-800 active:scale-95 transition-all duration-150"
+                >
+                  <RotateCw size={14} strokeWidth={2.5} />
+                  <span>נסה שוב</span>
+                </button>
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty state overlay (no sites / no matches) ── */}
+      {!sitesLoading && !sitesError && filteredMapSites.length === 0 && (
+        <div className="absolute inset-0 z-[1001] flex items-center justify-center px-6 pointer-events-none">
+          <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <EmptyState
+              icon={sites.length === 0 ? MapPinOff : SearchX}
+              title={sites.length === 0 ? 'אין עדיין אתרי הנצחה במפה' : 'לא נמצאו אתרים תואמים'}
+              message={
+                sites.length === 0
+                  ? 'עדיין לא נוספו אתרי הנצחה. היה/י הראשון/ה לשתף נקודה ולשמר את הזיכרון.'
+                  : 'נסה/י לשנות את מילות החיפוש או לאפס את הסינון.'
+              }
+              action={
+                sites.length === 0 ? (
+                  <button
+                    onClick={() => navigate('/add-point')}
+                    className="flex items-center gap-1.5 bg-olive-700 text-white text-sm font-semibold
+                               px-4 py-2 rounded-lg hover:bg-olive-800 active:scale-95 transition-all duration-150"
+                  >
+                    <Plus size={14} strokeWidth={2.5} />
+                    <span>הוסף נקודה</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setMemQuery(''); resetSiteFilters(); selectMapChip('all') }}
+                    className="flex items-center gap-1.5 border border-slate-300 text-slate-600 text-sm font-medium
+                               px-4 py-2 rounded-lg hover:bg-slate-50 active:scale-95 transition-all duration-150"
+                  >
+                    איפוס סינון
+                  </button>
+                )
+              }
+            />
+          </div>
         </div>
       )}
 
