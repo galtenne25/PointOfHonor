@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './contexts/AppContext'
 import { ToastProvider } from './contexts/ToastContext'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ConfirmProvider } from './contexts/ConfirmContext'
 import { RequireAuth, RequireAdmin } from './components/RequireAuth'
 import Layout from './components/Layout'
@@ -25,6 +25,21 @@ import OnboardingPage from './pages/OnboardingPage'
 import SoldierProfilePage from './pages/SoldierProfilePage'
 import CommunityFeedPage from './pages/CommunityFeedPage'
 import ActiveNavigationPage from './pages/ActiveNavigationPage'
+import LandingPage from './pages/LandingPage'
+
+/**
+ * SplashGate — shows the memorial splash once, right after an explicit login.
+ * `showSplash` is set by signIn/signUp in AuthContext (NOT on refresh/session
+ * restore), so the splash appears exactly once per login; its CTA ("המשך")
+ * dismisses it into the app. The normal routes render the rest of the time.
+ */
+function SplashGate({ children }) {
+  const { user, loading, showSplash, dismissSplash } = useAuth()
+  if (!loading && user && showSplash) {
+    return <LandingPage onContinue={dismissSplash} />
+  }
+  return children
+}
 
 export default function App() {
   const [isOnboarded, setIsOnboarded] = useState(
@@ -42,6 +57,7 @@ export default function App() {
     <AuthProvider>
     <AppProvider>
     <ConfirmProvider>
+    <SplashGate>
     <Routes>
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/routes/:id/navigate" element={<ActiveNavigationPage />} />
@@ -66,6 +82,7 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
+    </SplashGate>
     </ConfirmProvider>
     </AppProvider>
     </AuthProvider>

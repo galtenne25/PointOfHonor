@@ -27,6 +27,7 @@
 12. [Testing](#testing)
 13. [Deployment](#deployment)
 14. [Project Structure](#project-structure)
+15. [The Development Journey (Vibe Coding)](#the-development-journey-vibe-coding)
 
 ---
 
@@ -248,6 +249,27 @@ src/
 scripts/              # offline seeding + schema SQL (data pipeline)
 tests/                # Vitest + Testing Library
 ```
+
+---
+
+## The Development Journey (Vibe Coding)
+
+A short note on the process behind the scenes — and how I tried to take this project one step beyond the usual requirements of an academic assignment.
+
+### 1. Building a real product, not just a prototype
+It was important to me that the project wouldn't just "work on my machine," but would feel like a product that could ship to market tomorrow morning. Rather than simply pushing the code to Vercel and hoping for the best, I built a real development workflow: I added tests (with **Vitest**) and set up **CI/CD via GitHub Actions**. This way, every time I push new code, the system first runs the test suite to make sure nothing broke, and only then deploys the new version live. I also didn't compromise on data security — everything is protected at the database level with Supabase **Row Level Security (RLS)**, so no user can delete or edit anyone else's data.
+
+### 2. A living map without manual data entry (smart use of AI)
+One of the biggest challenges was making the map interesting and relevant from the very first moment. I didn't want to show new users an empty map, or type in meaningless placeholder data like "test 123." Instead, I built dedicated seeding scripts (`seed_direct_ai.js` and `seed_wikidata.js`) that use **large language models (LLMs)** — alongside data pulled from open sources such as Wikidata — to generate historical, respectful content about memorial sites and heritage routes. The script processed the data, applied location-clustering algorithms, and injected everything straight into the database. That's how I created dozens of memorial points and routes, from scratch, that look and feel completely real.
+
+### 3. The development experience (Vibe Coding)
+Throughout the project I didn't work alone — I used AI tools as a full-fledged "development team":
+
+- **Backend & architecture:** I used the **Supabase AI Assistant** to validate that my data schemas were accurate, to phrase the complex security rules (RLS), and even to translate the data structure into the **ERD diagram** attached to this submission.
+- **Complex logic:** With **Claude Code (CLI)** working alongside me directly in the terminal, I could tackle harder challenges quickly — for example, algorithms that compute geographic distances (the **Haversine formula**) to generate sensible routes from one memorial to the next.
+- **Design & UI/UX:** The constant back-and-forth with the AI let me polish the **Tailwind** components, fix frustrating Hebrew (RTL) support bugs, and make sure the mobile user experience felt smooth and natural.
+
+Ultimately, the Vibe Coding approach helped me not just write code faster, but focus on what truly matters — the architecture, the user experience, and building a project I'm genuinely proud of.
 
 ---
 
