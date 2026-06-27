@@ -61,6 +61,10 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  // One-shot post-login welcome splash. Set true on an explicit sign-in/sign-up
+  // (NOT on session restore or refresh), cleared on "continue" or sign-out — so
+  // it appears exactly once per login.
+  const [showSplash, setShowSplash] = useState(false)
 
   // Initial session + auth listener.
   //
@@ -154,16 +158,21 @@ export function AuthProvider({ children }) {
         throw e
       }
     }
+    setShowSplash(true)
     return data
   }, [])
 
   const signIn = useCallback(async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    setShowSplash(true)
     return data
   }, [])
 
+  const dismissSplash = useCallback(() => setShowSplash(false), [])
+
   const signOut = useCallback(async () => {
+    setShowSplash(false)
     await supabase.auth.signOut()
   }, [])
 
@@ -195,6 +204,7 @@ export function AuthProvider({ children }) {
       session, user, profile, loading, isAdmin,
       needsProfileCompletion, profileLooksDefault,
       signUp, signIn, signOut, refreshProfile,
+      showSplash, dismissSplash,
     }}>
       {children}
     </AuthCtx.Provider>

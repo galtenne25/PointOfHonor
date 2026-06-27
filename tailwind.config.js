@@ -22,6 +22,8 @@ export default {
       },
       fontFamily: {
         sans: ['Assistant', 'system-ui', 'sans-serif'],
+        // Serif display face for the memorial splash (title / tagline).
+        display: ['"Frank Ruhl Libre"', 'Georgia', 'serif'],
       },
     },
   },
